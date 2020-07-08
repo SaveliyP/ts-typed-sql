@@ -1,13 +1,3 @@
-# ts-typed-sql
-A fully typed SQL builder for TypeScript.
-
-Eventually it should support all possible SQL statements while retaining type information. Right now it only supports defining models, basic SELECT statements with CTEs, some operators and the avg() function. Adding more operators and functions is just a matter of grinding through the SQL documentation.
-
-Currently I'm targetting PostgreSQL, because it has better documentation, but eventually it will support other SQL dialects too.
-
-### Latest working example
-
-```typescript
 import { Model } from "./model";
 import { DBIncrements, DBEnum, DBString, DBBinary, DBInteger, DBTimestamp } from "./columns";
 import { BeginQuery } from "./select";
@@ -70,4 +60,3 @@ BeginQuery.with({
 }).catch(res => {
     console.log("Generated (but did not execute) the query: " + res);
 });
-```
