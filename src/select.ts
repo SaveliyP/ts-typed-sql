@@ -20,11 +20,13 @@ interface SelectQuery {
     offset: string;
 }
 
+//TODO: wrong mental model, WITH can only take from generated tables, so Models are a level above "TableProvider"
+//TODO: can WITH take from temporary tables?
 export class BeginQuery {
     static with<CTE extends TableTypes>(tables: TableProviders<CTE>): WithQuery<CTE> {
         var creation: string[] = [];
         for (var x in tables) {
-            creation.push("(" + tables[x]() + ") AS " + identifier(x));
+            creation.push(identifier(x) + " AS (" + tables[x]() + ")");
         }
         const query = {
             with: creation.length > 0 ? ("WITH " + creation.join(",")) : "",
@@ -111,6 +113,7 @@ class FromQuery<T extends TableTypes> {
             this.query.where = "WHERE " + this.conditions.map(x => "(" + x + ")").join(" AND ");
         }
         const groups = lambda(this.from);
+        this.query.groupBy = "GROUP BY " + Object.values(groups).map(x => x()).join(",");
         return new GroupedQuery(this.query, this.from, <{[key in keyof G]: G[key] extends Expression<infer R, boolean> ? Expression<R, true> : never}> <any> groups);
     }
 }

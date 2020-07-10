@@ -1,4 +1,4 @@
-import { Model } from "./model";
+import { Model, generateMigration } from "./model";
 import { DBIncrements, DBEnum, DBString, DBBinary, DBInteger, DBTimestamp } from "./columns";
 import { BeginQuery } from "./select";
 import { op, avg, and } from "./expressions";
@@ -11,7 +11,7 @@ const Picture = new Model("picture", {
     time: new DBTimestamp()
 }, t => {
     t.primary("id");
-    t.foreign("uploader").ref(User, "id");
+    //t.foreign("uploader").ref(User, "id"); //TODO: MUST FIX IT!!!
 });
 
 const User = new Model("user", {
@@ -29,13 +29,14 @@ const User = new Model("user", {
     t.foreign("profile_picture").ref(Picture, "id");
 });
 
+//TODO: Cannot use a table in a WITH statement!
 BeginQuery.with({
-    pp: Picture,
+    //pp: Picture,
     test: BeginQuery.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email})).select((t, g) => ({id: g.a, email: g.b}))
 })
 .from({
     u: User,
-    p: "pp",
+    p: Picture,
     unused: "test"
 })
 .where(({p}) => and(op(p.height, '>=', 200), op(p.width, '>=', 200)))
@@ -60,3 +61,8 @@ BeginQuery.with({
 }).catch(res => {
     console.log("Generated (but did not execute) the query: " + res);
 });
+
+console.log("Generated migration: " + generateMigration({}, {
+    picture: Picture,
+    user: User
+}));

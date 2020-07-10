@@ -8,7 +8,7 @@ Currently I'm targetting PostgreSQL, because it has better documentation, but ev
 ### Latest working example
 
 ```typescript
-import { Model } from "./model";
+import { Model, generateMigration } from "./model";
 import { DBIncrements, DBEnum, DBString, DBBinary, DBInteger, DBTimestamp } from "./columns";
 import { BeginQuery } from "./select";
 import { op, avg, and } from "./expressions";
@@ -21,7 +21,6 @@ const Picture = new Model("picture", {
     time: new DBTimestamp()
 }, t => {
     t.primary("id");
-    t.foreign("uploader").ref(User, "id");
 });
 
 const User = new Model("user", {
@@ -40,12 +39,11 @@ const User = new Model("user", {
 });
 
 BeginQuery.with({
-    pp: Picture,
     test: BeginQuery.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email})).select((t, g) => ({id: g.a, email: g.b}))
 })
 .from({
     u: User,
-    p: "pp",
+    p: Picture,
     unused: "test"
 })
 .where(({p}) => and(op(p.height, '>=', 200), op(p.width, '>=', 200)))
@@ -70,4 +68,51 @@ BeginQuery.with({
 }).catch(res => {
     console.log("Generated (but did not execute) the query: " + res);
 });
+
+console.log("Generated migration: " + generateMigration({}, {
+    picture: Picture,
+    user: User
+}));
 ```
+
+Output:
+
+```SQL
+Generated migration: CREATE TABLE "picture" (
+        "id" SERIAL,
+        "uploader" INT,
+        "width" INT,
+        "height" INT,
+        "time" TIMESTAMP,
+        CONSTRAINT "PK_picture" PRIMARY KEY ("id")
+);
+CREATE TABLE "user" (
+        "id" SERIAL,
+        "privilege" VARCHAR(4),
+        "username" VARCHAR(255),
+        "password" BYTEA,
+        "email" VARCHAR(255),
+        "registration_time" TIMESTAMP,
+        "profile_picture" INT,
+        CONSTRAINT "PK_user" PRIMARY KEY ("id"),
+        CONSTRAINT "UQ_user_username" UNIQUE ("username"),
+        CONSTRAINT "UQ_user_email" UNIQUE ("email")
+);
+ALTER TABLE "user"
+        ADD CONSTRAINT "FK_user_picture_profile__picture" FOREIGN KEY ("profile_picture") REFERENCES "picture"("id");
+
+Generated (but did not execute) the query: WITH "test" AS (SELECT ("user"."id") AS "id",("user"."email") AS "email" FROM "user" AS "user" GROUP BY "user"."id","user"."email") SELECT ("p"."width") AS "picture_width",(AVG("p"."height")) AS "average_picture_height" FROM "user" AS "u","picture" AS "p","test" AS "unused" WHERE ((("p"."height") >= (200)) AND (("p"."width") >= (200))) AND (("p"."id") = ("u"."profile_picture")) AND (("unused"."id") = ("unused"."id")) GROUP BY "p"."width" HAVING ((AVG("p"."height")) >= (200))
+```
+
+### TODO:
+
+ - Some final bits and pieces for migration code
+ - Extra syntax and options for model columns
+ - Finish SELECT statement
+ - Connect to database and execute queries
+ - INSERT, UPDATE, DELETE
+ - Placeholders and prepared queries
+ - Add operator precedence to reduce parentheses
+ - Add support for more syntax
+ - MySQL & extendable dialect support
+ - Lots of other stuff
