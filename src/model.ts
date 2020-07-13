@@ -1,6 +1,6 @@
 import { TableExpression, TableProvider, SQLType, TableType } from './queries';
 import { Column, deserializeColumn } from './columns';
-import { identifier } from './utils';
+import { identifier, expression } from './utils';
 import { dict, str, array, strDict } from 'type-builder';
 import { isDeepStrictEqual } from 'util';
 
@@ -39,9 +39,7 @@ declare class AbstractModelClass<T extends TableType> {
 }
 
 type ModelClass<T extends TableType> = TableProvider<T> & AbstractModelClass<T>;
-const ModelClass =  <new <T extends TableType>(name: string, obj: TableDefinition<T>) => ModelClass<T>>
-                    <any>
-function<T extends TableType>(name: string, obj: TableDefinition<T>): ModelClass<T> {
+const ModelClass = function<T extends TableType>(this: ModelClass<T>, name: string, obj: TableDefinition<T>): ModelClass<T> {
     function Model(): string;
     function Model(alias: string): TableExpression<T>;
     function Model(alias?: string): TableExpression<T> | string {
@@ -50,9 +48,7 @@ function<T extends TableType>(name: string, obj: TableDefinition<T>): ModelClass
         } else {
             var expr: TableExpression<T> = <any> {}; //TODO: <any>
             for (var key in res.columns) {
-                (function(key) {
-                    expr[key] = <any> (() => identifier(alias) + "." + identifier(key)); //TODO: <any>
-                })(key);
+                expr[key] = expression(identifier(alias) + "." + identifier(key), 99);
             }
             return expr;
         }
@@ -63,9 +59,10 @@ function<T extends TableType>(name: string, obj: TableDefinition<T>): ModelClass
     });
     const ret = <ModelClass<T>> <any> res; //TODO: <any>
     res.columns = mapValues(obj, ret);
-    
+
+    Object.setPrototypeOf(Model, Object.getPrototypeOf(this)); //TODO: rethink better way to implement this
     return ret;
-}
+} as unknown as new <T extends TableType>(name: string, obj: TableDefinition<T>) => ModelClass<T>;
 
 type ArrayLength<T, N extends number> = T[] & {length: N};
 

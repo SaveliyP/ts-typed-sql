@@ -1,7 +1,7 @@
 import { Model, generateMigration } from "./model";
 import { DBIncrements, DBEnum, DBString, DBBinary, DBInteger, DBTimestamp } from "./columns";
-import { BeginQuery } from "./select";
 import { op, avg, and } from "./expressions";
+import { database } from "./database";
 
 const Picture = new Model("picture", {
     id: new DBIncrements(),
@@ -29,10 +29,36 @@ const User = new Model("user", {
     t.foreign("profile_picture").ref(Picture, "id");
 });
 
+console.log("Generated migration: " + generateMigration({}, {
+    picture: Picture,
+    user: User
+}));
+
+database({
+    host: "192.168.3.3",
+    port: 5432,
+    user: "postgres",
+    password: "password",
+    database: "postgres"
+}).then(db => {
+
+db.select(t => ({
+    a1: 17,
+    a2: "test"
+})).execute().then(s => {
+}, r => {
+    console.log(r);
+});
+
+/*BeginQuery.from([User, Picture]).select(t => ({
+    a: t[0].id,
+    b: t[1].height
+}));*/
+
 //TODO: Cannot use a table in a WITH statement!
-BeginQuery.with({
+db.with({
     //pp: Picture,
-    test: BeginQuery.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email})).select((t, g) => ({id: g.a, email: g.b}))
+    test: db.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email})).select((t, g) => ({id: g.a, email: g.b}))
 })
 .from({
     u: User,
@@ -54,6 +80,7 @@ BeginQuery.with({
         average_picture_height: avg(p.height),
     };
 }).execute().then(result => {
+    console.log(result);
     result.forEach(x => {
         x.average_picture_height.toExponential(16);
         x.picture_width.toPrecision(16);
@@ -62,7 +89,4 @@ BeginQuery.with({
     console.log("Generated (but did not execute) the query: " + res);
 });
 
-console.log("Generated migration: " + generateMigration({}, {
-    picture: Picture,
-    user: User
-}));
+});

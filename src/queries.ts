@@ -9,6 +9,7 @@ export interface Expression<T extends SQLType, U extends boolean> {
     (): string;
     return_type: T;
     grouped: U;
+    precedence: number;
 };
 
 //This interface represents an instance of a table that has been aliased to a certain name, such as during a FROM clause in a SELECT statement.

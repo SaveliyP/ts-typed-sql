@@ -30,6 +30,8 @@
     "webpack-node-externals": "^1.7.2"
   },
   "dependencies": {
+    "@types/pg": "^7.14.4",
+    "pg": "^8.3.0",
     "type-builder": "^1.0.1"
   }
 }
