@@ -1,4 +1,4 @@
-import { SQLType } from './queries';
+import { SQLType, JSONType } from './queries';
 import { TypeChecker, dict, optional, bool, str, intersection, num, array, union } from 'type-builder';
 
 function ColumnType<T extends string, U extends {}>(x: {SerializedType: TypeChecker<U>}, y: T) {
@@ -552,7 +552,7 @@ export class DBEnum<T extends string> extends Column<T> {
     }
 }
 
-export class DBJson extends Column<Object> {
+export class DBJson extends Column<JSONType> {
     static SerializedType = ColumnType(Column, "json");
 
     getSQLType() {
@@ -577,7 +577,7 @@ export class DBJson extends Column<Object> {
     }
 }
 
-export class DBJsonB extends Column<Object> {
+export class DBJsonB extends Column<JSONType> {
     static SerializedType = ColumnType(Column, "jsonb");
 
     getSQLType() {

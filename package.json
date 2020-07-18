@@ -23,6 +23,7 @@
   "license": "UNLICENSED",
   "devDependencies": {
     "@types/node": "^14.0.14",
+    "@types/pg": "^7.14.4",
     "ts-loader": "^7.0.5",
     "typescript": "^3.9.6",
     "webpack": "^4.43.0",
@@ -30,7 +31,6 @@
     "webpack-node-externals": "^1.7.2"
   },
   "dependencies": {
-    "@types/pg": "^7.14.4",
     "pg": "^8.3.0",
     "type-builder": "^1.0.1"
   }

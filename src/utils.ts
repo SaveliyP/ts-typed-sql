@@ -1,35 +1,34 @@
-import { Expression } from "./queries";
+import { Expression, SQLType, ExpressionType, TableType, TableProvider } from "./queries";
+
+//https://stackoverflow.com/questions/50374908/transform-union-type-to-intersection-type
+export type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends ((k: infer I) => void) ? I : never;
 
 export function identifier(id: string): string {
     return "\"" + id.replace(/"/g, "\"\"") + "\"";
 }
 
-export function expression<T, U extends boolean>(expr: string, precedence: number): Expression<T, U> {
-    return <Expression<T, U>> Object.assign(() => expr, {precedence});
+export function expression<T extends SQLType, U extends boolean, P extends TableType>(expr: ExpressionType[], precedence: number): Expression<T, U, P> {
+    return <Expression<T, U, P>> Object.assign(() => expr, {precedence});
 }
 
-export function exprToStr<T>(expression: Expression<T, any> | T, outerPrecednece: number) {
-    var res: string;
+export function exprToStr(expression: SQLType | Expression<SQLType, boolean, TableType>, outerPrecednece: number): ExpressionType[] {
+    var res: ExpressionType[];
     var parentheses = outerPrecednece > 99;
 
-    if (expression instanceof Function) {
+    if (typeof expression === 'function') {
         res = expression();
         parentheses = outerPrecednece > expression.precedence;
-    } else if (typeof expression === 'number') {
-        res = expression.toString();
-    } else if (typeof expression === 'boolean') {
-        res = expression ? "true" : "false";
-    } else if (typeof expression === 'string') {
-        res = "CAST (X'" + Buffer.from(expression, "utf8").toString("hex") + "' AS TEXT)"; //TODO: probably invalid syntax
-    } else if (expression instanceof Buffer) {
-        res = "X'" + expression.toString("hex") + "'";
+    } else if (typeof expression === 'number' || typeof expression === 'string' || typeof expression === 'boolean' || expression instanceof BigInt || expression instanceof Buffer || expression instanceof Date || 'json' in expression) {
+        res = [{
+            value: expression
+        }];
     } else if (expression instanceof Array) {
-        res = "B'" + expression.map(x => (x ? "1" : "0")).join("") + "'";
+        res = ["B'" + expression.map(x => (x ? "1" : "0")).join("") + "'"];
     } else {
-        throw new Error("Bad type! " + typeof expression);
+        throw Error("Bad type! " + typeof expression);
     }
 
-    return parentheses ? "(" + res + ")" : res;
+    return parentheses ? ["(",  ...res, ")"] : res;
 }
 
 //https://stackoverflow.com/questions/53966509/typescript-type-safe-omit-function
@@ -48,10 +47,19 @@ function omit<T extends object, K extends [...(keyof T)[]]>(obj: T, ...keys: K):
     return ret;
 }
 
-function property<K extends keyof {}, U extends any>(key: K, obj: U): {[key in K]: U} {
-    return {[key]: obj};
+function keys<T extends {}>(obj: T): (keyof T)[] {
+    var result: (keyof T)[] = [];
+    var k: keyof T;
+    for (k in obj) {
+        result.push(k);
+    }
+    return result;
 }
 
 export function replace<T extends {}, K extends keyof T, U extends any>(obj: T, key: K, target: U): {[key in keyof T]: key extends K ? (K extends key ? U : T[key]) : T[key]} {
-    return  <any>{...omit(obj, key), [key]: target}; //TODO: remove <any>
+    return  <any> {...omit(obj, key), [key]: target}; //TODO: remove <any>
 }
+
+export function repl<T extends {}, U extends {}>(obj: T, target: U): {[key in (keyof T) | (keyof U)]: key extends keyof U ? U[key] : key extends keyof T ? T[key] : never} {
+    return <any>{...obj, ...target};
+} 

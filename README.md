@@ -169,12 +169,12 @@ AVG returns a string, most likely because that's how `pg` returns DECIMALs. The 
 
 ### TODO:
 
- - Connect to database and execute queries (in progress)
- - Placeholders and prepared queries
- - INSERT, UPDATE, DELETE
- - Allow passing tables as parameters into FROM
+ - Finish work on parameterized queries
+ - Execute queries with parameters
  - Right now, only implicit inner joins work with FROM clause. Need to add explicit joins.
- - ORDER BY, LIMIT, OFFSET for SELECT statements
+ - INSERT, UPDATE, DELETE
+ - Prepared queries
+ - Allow passing tables as parameters into FROM
  - Add more operators and functions
  - Some final bits and pieces for migration code
  - Extra syntax and options for model columns to fully implement CREATE TABLE
@@ -186,5 +186,4 @@ AVG returns a string, most likely because that's how `pg` returns DECIMALs. The 
 
 ### Housekeeping:
 
- - Remove @types/pg from dependencies and move it into devDependencies
  - Figure out whether I should use webpack
