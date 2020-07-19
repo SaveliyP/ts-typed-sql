@@ -1,5 +1,5 @@
-import { Expression, SQLType, TableType, ExpressionType, Parameter, ToSQLType } from './queries';
-import { expression, exprToStr } from './utils';
+import { Expression, SQLType, TableType, ExpressionType, Parameter, ToSQLType, ExpressionF } from './queries';
+import { expression, exprToStr, rawOrExpression, withParentheses, addPhantomProperties, $b } from './utils';
 
 //TODO: rewrite this with function overloading instead of whatever this is...
 
@@ -76,166 +76,221 @@ type aMathOperators = keyof typeof mathPrecedences;
 type Operator = keyof typeof precedences;
 
 export function op
-<T extends number | boolean | string, A extends T | Expression<T, boolean, TableType>, B extends T | Expression<T, boolean, TableType>>
+<T extends number | boolean | string, A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>>
 (a: A, op: ComparisonOperators, b: B):
 Expression<boolean, AllGrouped<A | B>, ParameterType<A | B>>;
 
 export function op
-<T extends boolean[], A extends T | Expression<T, boolean, TableType>, B extends T | Expression<T, boolean, TableType>>
+<T extends boolean[], A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>>
 (a: A, op: '||' | '&' | '|' | '#', b: B):
 Expression<boolean[], AllGrouped<A | B>, ParameterType<A | B>>;
 
 export function op
-<T extends number | BigInt, A extends T | Expression<T, boolean, TableType>, B extends T | Expression<T, boolean, TableType>>
+<T extends number | bigint, A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>>
 (a: A, op: aMathOperators, b: B):
 Expression<T, AllGrouped<A | B>, ParameterType<A | B>>;
 
 export function op
-<T extends SQLType, A extends T | Expression<T, boolean, TableType>, B extends T | Expression<T, boolean, TableType>>
+<T extends SQLType, A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>>
 (a: A, o: Operator, b: B):
 Expression<SQLType, AllGrouped<A | B>, ParameterType<A | B>> {
-    const p = precedences[o];
-    return expression([...exprToStr(a, p), " ", o, " ", ...exprToStr(b, p)], p);
+    const PRECEDENCE = precedences[o];
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) => {
+            const exprs = [a, b].map(mapRawExpression(PRECEDENCE, parameters, names, args));
+            return exprs[0] + " " + o + " " + exprs[1];
+        },
+        precedence: PRECEDENCE
+    });
 }
 
-export function $b<K extends string | number | symbol>(id: K): Expression<boolean, true, {[key in K]: boolean}> {
-    return $<boolean, K>(id);
-}
-export function $s<K extends string | number | symbol>(id: K): Expression<string, true, {[key in K]: string}> {
-    return $<string, K>(id);
-}
-export function $<T extends SQLType, K extends string | number | symbol>(id: K): Expression<T, true, {[key in K]: T}> {
-    var param: Parameter<T, K> = {
-        name: id,
-        type: <T> <any> null
+type AsExpression<T extends SQLType | Expression<SQLType, boolean, ExpressionF<never>>> = T extends SQLType ? Expression<T, true, ExpressionF<{}>> : T;
+type ParameterType<T extends SQLType | Expression<SQLType, boolean, ExpressionF<never>>> = AsExpression<T>['execute'];
+
+type AllGrouped<T extends SQLType | Expression<SQLType, boolean, ExpressionF<never>>> = false extends (T extends Expression<SQLType, false, ExpressionF<never>> ? false : never) ? false : true;
+
+function mapRawExpression(precedence: number, parameters: never, names: {[key: string]: string}, args: SQLType[]): ((x: SQLType | Expression<SQLType, boolean, ExpressionF<never>>) => string) {
+    return x => {
+        const y = rawOrExpression(x);
+        return withParentheses(y.execute(parameters, names, args), precedence > y.precedence);
     };
-    return expression([param], 99);
 }
 
-type AsExpression<T extends SQLType | Expression<SQLType, boolean, TableType>> = T extends Expression<SQLType, boolean, any> ? T : Expression<ToSQLType<T>, true, {}>;
-type ParameterType<T extends SQLType | Expression<SQLType, boolean, TableType>> = AsExpression<T>['parameters'];
-
-type AllGrouped<T extends SQLType | Expression<SQLType, boolean, TableType>> = false extends (T extends Expression<SQLType, false, TableType> ? false : never) ? false : true;
-
-export function between<
-    T extends SQLType,
-    A extends T | Expression<T, boolean, TableType>,
-    B extends T | Expression<T, boolean, TableType>,
-    C extends T | Expression<T, boolean, TableType>
->(a: A, x: B, y: C): Expression<boolean, AllGrouped<A | B | C>, ParameterType<A | B | C>> {
-    return expression([...exprToStr(a, 6), " BETWEEN ", ...exprToStr(x, 6), " AND ", ...exprToStr(y, 6)], 6);
+export function between<T extends SQLType, A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>, C extends T | Expression<T, boolean, ExpressionF<never>>>(a: A, b: B, c: C): Expression<boolean, AllGrouped<A | B | C>, ParameterType<A | B | C>> {
+    const PRECEDENCE = 6;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) => {
+            const exprs = [a, b, c].map(mapRawExpression(PRECEDENCE, parameters, names, args));
+            return exprs[0] + " BETWEEN " + exprs[1] + " AND " + exprs[2];
+        },
+        precedence: PRECEDENCE
+    });
 }
 
-export function notBetween<
-    T extends SQLType,
-    A extends T | Expression<T, boolean, TableType>,
-    B extends T | Expression<T, boolean, TableType>,
-    C extends T | Expression<T, boolean, TableType>
->(a: A, x: B, y: C): Expression<boolean, AllGrouped<A | B | C>, ParameterType<A | B | C>> {
-    return expression([...exprToStr(a, 6), " NOT BETWEEN ", ...exprToStr(x, 6), " AND ", ...exprToStr(y, 6)], 6);
+export function notBetween<T extends SQLType, A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>, C extends T | Expression<T, boolean, ExpressionF<never>>>(a: A, b: B, c: C): Expression<boolean, AllGrouped<A | B | C>, ParameterType<A | B | C>> {
+    const PRECEDENCE = 6;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) => {
+            const exprs = [a, b, c].map(mapRawExpression(PRECEDENCE, parameters, names, args));
+            return exprs[0] + " NOT BETWEEN " + exprs[1] + " AND " + exprs[2];
+        },
+        precedence: PRECEDENCE
+    });
 }
 
-export function betweenSymmetric<
-    T extends SQLType,
-    A extends T | Expression<T, boolean, TableType>,
-    B extends T | Expression<T, boolean, TableType>,
-    C extends T | Expression<T, boolean, TableType>
->(a: A, x: B, y: C): Expression<boolean, AllGrouped<A | B | C>, ParameterType<A | B | C>> {
-    return expression([...exprToStr(a, 6), " BETWEEN SYMMETRIC ", ...exprToStr(x, 6), " AND ", ...exprToStr(y, 6)], 6);
+export function betweenSymmetric<T extends SQLType, A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>, C extends T | Expression<T, boolean, ExpressionF<never>>>(a: A, b: B, c: C): Expression<boolean, AllGrouped<A | B | C>, ParameterType<A | B | C>> {
+    const PRECEDENCE = 6;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) => {
+            const exprs = [a, b, c].map(mapRawExpression(PRECEDENCE, parameters, names, args));
+            return exprs[0] + " BETWEEN SYMMETRIC " + exprs[1] + " AND " + exprs[2];
+        },
+        precedence: PRECEDENCE
+    });
 }
 
-export function notBetweenSymmetric<
-    T extends SQLType,
-    A extends T | Expression<T, boolean, TableType>,
-    B extends T | Expression<T, boolean, TableType>,
-    C extends T | Expression<T, boolean, TableType>
->(a: A, x: B, y: C): Expression<boolean, AllGrouped<A | B | C>, ParameterType<A | B | C>> {
-    return expression([...exprToStr(a, 6), " NOT BETWEEN SYMMETRIC ", ...exprToStr(x, 6), " AND ", ...exprToStr(y, 6)], 6);
+export function notBetweenSymmetric<T extends SQLType, A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>, C extends T | Expression<T, boolean, ExpressionF<never>>>(a: A, b: B, c: C): Expression<boolean, AllGrouped<A | B | C>, ParameterType<A | B | C>> {
+    const PRECEDENCE = 6;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) => {
+            const exprs = [a, b, c].map(mapRawExpression(PRECEDENCE, parameters, names, args));
+            return exprs[0] + " NOT BETWEEN SYMMETRIC " + exprs[1] + " AND " + exprs[2];
+        },
+        precedence: PRECEDENCE
+    });
 }
 
-export function distinct<T extends SQLType, A extends T | Expression<T, boolean, TableType>, B extends T | Expression<T, boolean, TableType>>(a: A, b: B): Expression<boolean, AllGrouped<A | B>, ParameterType<A | B>> {
-    return expression([...exprToStr(a, 4), " IS DISTINCT FROM ", ...exprToStr(b, 4)], 4);
+export function distinct<T extends SQLType, A extends T | Expression<SQLType, boolean, ExpressionF<never>>, B extends T | Expression<SQLType, boolean, ExpressionF<never>>>(a: A, b: B): Expression<boolean, AllGrouped<A | B>, ParameterType<A | B>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) => {
+            const exprs = [a, b].map(mapRawExpression(PRECEDENCE, parameters, names, args));
+            return exprs[0] + " IS DISTINCT FROM " + exprs[1];
+        },
+        precedence: PRECEDENCE
+    });
 }
 
-export function notDistinct<T extends SQLType, A extends T | Expression<T, boolean, TableType>, B extends T | Expression<T, boolean, TableType>>(a: A, b: B): Expression<boolean, AllGrouped<A | B>, ParameterType<A | B>> {
-    return expression([...exprToStr(a, 4), " IS NOT DISTINCT FROM ", ...exprToStr(b, 4)], 4);
+export function notDistinct<T extends SQLType, A extends T | Expression<SQLType, boolean, ExpressionF<never>>, B extends T | Expression<SQLType, boolean, ExpressionF<never>>>(a: A, b: B): Expression<boolean, AllGrouped<A | B>, ParameterType<A | B>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) => {
+            const exprs = [a, b].map(mapRawExpression(PRECEDENCE, parameters, names, args));
+            return exprs[0] + " IS NOT DISTINCT FROM " + exprs[1];
+        },
+        precedence: PRECEDENCE
+    });
 }
 
-export function isNull<T extends boolean | Expression<boolean, boolean, TableType>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
-    return expression([...exprToStr(a, 4), " IS NULL"], 4);
+export function isNull<T extends SQLType | Expression<SQLType, boolean, ExpressionF<never>>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) => {
+            return mapRawExpression(PRECEDENCE, parameters, names, args)(a) + " IS NULL";
+        },
+        precedence: PRECEDENCE
+    });
 }
 
-export function notNull(a: boolean): Expression<boolean, true, {}>;
-export function notNull<P extends TableType, G extends boolean>(a: Expression<boolean, G, P>): Expression<boolean, G, P>;
-export function notNull(a: boolean | Expression<boolean, boolean, TableType>): Expression<boolean, boolean, TableType> {
-    return expression([...exprToStr(a, 4), " IS NOT NULL"], 4);
+export function notNull<T extends SQLType | Expression<SQLType, boolean, ExpressionF<never>>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            mapRawExpression(PRECEDENCE, parameters, names, args)(a) + " IS NOT NULL",
+        precedence: PRECEDENCE
+    });
 }
 
-notNull($b("69"))
-
-export function isTrue<T extends boolean | Expression<boolean, boolean, TableType>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
-    return expression([...exprToStr(a, 4), " IS TRUE"], 4);
+export function isTrue<T extends boolean | Expression<boolean, boolean, ExpressionF<never>>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            mapRawExpression(PRECEDENCE, parameters, names, args)(a) + " IS TRUE",
+        precedence: PRECEDENCE
+    });
 }
 
-export function notTrue<T extends boolean | Expression<boolean, boolean, TableType>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
-    return expression([...exprToStr(a, 4), " IS NOT TRUE"], 4);
+export function notTrue<T extends boolean | Expression<boolean, boolean, ExpressionF<never>>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            mapRawExpression(PRECEDENCE, parameters, names, args)(a) + " IS NOT TRUE",
+        precedence: PRECEDENCE
+    });
 }
 
-export function isFalse<T extends boolean | Expression<boolean, boolean, TableType>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
-    return expression([...exprToStr(a, 4), " IS FALSE"], 4);
+export function isFalse<T extends boolean | Expression<boolean, boolean, ExpressionF<never>>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            mapRawExpression(PRECEDENCE, parameters, names, args)(a) + " IS FALSE",
+        precedence: PRECEDENCE
+    });
 }
 
-export function notFalse<T extends boolean | Expression<boolean, boolean, TableType>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
-    return expression([...exprToStr(a, 4), " IS NOT FALSE"], 4);
+export function notFalse<T extends boolean | Expression<boolean, boolean, ExpressionF<never>>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            mapRawExpression(PRECEDENCE, parameters, names, args)(a) + " IS NOT FALSE",
+        precedence: PRECEDENCE
+    });
 }
 
-export function isUnknown<T extends boolean | Expression<boolean, boolean, TableType>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
-    return expression([...exprToStr(a, 4), " IS UNKNOWN"], 4);
+export function isUnknown<T extends boolean | Expression<boolean, boolean, ExpressionF<never>>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            mapRawExpression(PRECEDENCE, parameters, names, args)(a) + " IS UNKNOWN",
+        precedence: PRECEDENCE
+    });
 }
 
-export function notUnknown<T extends boolean | Expression<boolean, boolean, TableType>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
-    return expression([...exprToStr(a, 4), " IS NOT UNKNOWN"], 4);
+export function notUnknown<T extends boolean | Expression<boolean, boolean, ExpressionF<never>>>(a: T): Expression<boolean, AllGrouped<T>, ParameterType<T>> {
+    const PRECEDENCE = 4;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            mapRawExpression(PRECEDENCE, parameters, names, args)(a) + " IS NOT UNKNOWN",
+        precedence: PRECEDENCE
+    });
 }
 
-export function and<P extends (boolean | Expression<boolean, boolean, TableType>)[]>(...expressions: P): Expression<boolean, AllGrouped<P[number]>, ParameterType<P[number]>> {
-    const ret: ExpressionType[][] = new Array(expressions.length * 2 - 1);
-    for (let i = 0; i < expressions.length; i++) {
-        ret[2 * i] = exprToStr(expressions[i], 1);
-    }
-    for (let i = 1; i < ret.length; i += 2) {
-        ret[i] = [" AND "];
-    }
-    return expression(ret.reduce((a, v) => {
-        a.push(...v);
-        return a;
-    }, []), 2);
+export function and<T extends (boolean | Expression<boolean, boolean, ExpressionF<never>>)[]>(...expressions: T): Expression<boolean, AllGrouped<T[number]>, ParameterType<T[number]>> {
+    const PRECEDENCE = 2;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            expressions.map(mapRawExpression(PRECEDENCE, parameters, names, args)).join(" AND "),
+        precedence: PRECEDENCE
+    });
 }
 
-export function or<T extends (boolean | Expression<boolean, boolean, TableType>)[]>(...expressions: T): Expression<boolean, AllGrouped<T[number]>, ParameterType<T[number]>> {
-    const ret: ExpressionType[][] = new Array(expressions.length * 2 - 1);
-    for (let i = 0; i < expressions.length; i++) {
-        ret[2 * i] = exprToStr(expressions[i], 1);
-    }
-    for (let i = 1; i < ret.length; i += 2) {
-        ret[i] = [" OR "];
-    }
-
-    return expression(ret.reduce((a, v) => {
-        a.push(...v);
-        return a;
-    }, []), 1);
+export function or<T extends (boolean | Expression<boolean, boolean, ExpressionF<never>>)[]>(...expressions: T): Expression<boolean, AllGrouped<T[number]>, ParameterType<T[number]>> {
+    const PRECEDENCE = 1;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            expressions.map(mapRawExpression(PRECEDENCE, parameters, names, args)).join(" OR "),
+        precedence: PRECEDENCE
+    });
 }
 
 type NotType = boolean | boolean[] | number;
-export function not<U extends NotType>(a: U): Expression<ToSQLType<U> extends NotType ? ToSQLType<U> : never, true, {}>;
-export function not<U extends Expression<NotType, boolean, TableType>>(a: U): U;
-export function not<U extends NotType | Expression<NotType, boolean, TableType>>(a: U): Expression<NotType, boolean, TableType> {
-    return expression(["~", ...exprToStr(a, 7)], 7);
+export function not<T extends NotType | Expression<NotType, boolean, ExpressionF<never>>>(a: T): Expression<AsExpression<T>['return_type'], AsExpression<T>['grouped'], ParameterType<T>> {
+    const PRECEDENCE = 7;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            "~" + mapRawExpression(PRECEDENCE, parameters, names, args)(a),
+        precedence: PRECEDENCE
+    });
 }
 
-type AvgType = number | BigInt;
-export function avg<U extends AvgType>(a: U): Expression<ToSQLType<U> extends AvgType ? ToSQLType<U> : never, true, {}>;
-export function avg<U extends Expression<AvgType, boolean, TableType>>(a: U): Expression<U['return_type'], true, U['parameters']>;
-export function avg<U extends AvgType | Expression<AvgType, boolean, TableType>>(a: U): Expression<AvgType, true, TableType> {
-    return expression(["AVG(", ...exprToStr(a, -99), ")"], 99);
+type AvgType = number | bigint;
+export function avg<U extends AvgType>(a: U): Expression<ToSQLType<U> extends AvgType ? ToSQLType<U> : never, true, ExpressionF<{}>>;
+export function avg<U extends Expression<AvgType, boolean, ExpressionF<never>>>(a: U): Expression<U['return_type'], true, U['execute']>;
+export function avg<U extends AvgType | Expression<AvgType, boolean, ExpressionF<never>>>(a: U): Expression<AvgType, true, ExpressionF<never>> {
+    const PRECEDENCE = 99;
+    return addPhantomProperties({
+        execute: (parameters: never, names: {[key: string]: string}, args: SQLType[]) =>
+            "AVG(" + mapRawExpression(-PRECEDENCE, parameters, names, args)(a) + ")",
+        precedence: PRECEDENCE
+    });
 }

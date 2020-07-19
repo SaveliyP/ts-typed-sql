@@ -1,5 +1,5 @@
-import { Expression, TableExpression, TableExpressions, TableProvider, TableProviders, TableType, TableTypes, SQLType } from './queries';
-import { identifier, exprToStr, expression, replace, repl } from './utils';
+import { Expression, TableExpression, TableExpressions, TableProvider, TableProviders, TableType, TableTypes, SQLType, ExpressionF } from './queries';
+import { identifier, expression, replace, repl } from './utils';
 
 import * as pg from 'pg';
 
@@ -7,7 +7,7 @@ type FromClause<CTE extends TableTypes, P extends TableType> = {[key: string]: T
 type ArrFromClause<CTE extends TableTypes, P extends TableType> = ((TableProvider<TableType, P> | keyof CTE)[] & {"0": any}) | [];
 type FromClauseType<CTE extends TableTypes, T extends FromClause<CTE, TableType>> = {[key in keyof T]: T[key] extends keyof CTE ? CTE[T[key]] : (T[key] extends TableProvider<infer R, TableType> ? R : never)};
 
-type GroupClause<P extends TableType> = {[key: string]: Expression<SQLType, true, P>};
+type GroupClause<P extends TableType> = {[key: string]: Expression<SQLType, true, ExpressionF<never>>};
 
 interface SelectQuery {
     with: string;

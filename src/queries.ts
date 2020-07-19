@@ -1,6 +1,6 @@
 export type JSONType = {json: Object};
-export type SQLType = string | number | boolean | boolean[] | Buffer | BigInt | Date | JSONType;
-export type ToSQLType<T> = T extends string ? string : (T extends number ? number : (T extends boolean ? boolean : (T extends boolean[] ? boolean[] : (T extends Buffer ? Buffer : (T extends BigInt ? BigInt : (T extends Date ? Date : (T extends JSONType ? JSONType : never)))))));
+export type SQLType = string | number | boolean | boolean[] | Buffer | bigint | Date | JSONType;
+export type ToSQLType<T> = T extends string ? string : (T extends number ? number : (T extends boolean ? boolean : (T extends boolean[] ? boolean[] : (T extends Buffer ? Buffer : (T extends bigint ? bigint : (T extends Date ? Date : (T extends JSONType ? JSONType : never)))))));
 
 export type TableType = {
     [key: string]: SQLType;
@@ -19,13 +19,15 @@ export interface Parameter<T extends SQLType, K extends string | number | symbol
 export type ExpressionType = (string | Value<SQLType> | Parameter<SQLType, string | number | symbol>);
 
 //Represents an expression returning type T, and U represents whether this expression can be used for an entire grouped row in a SELECT statement.
-export type Expression<T extends SQLType, U extends boolean, P extends TableType> = {
-    (): ExpressionType[];
+export type Expression<T extends SQLType, U extends boolean, P extends ExpressionF<never>> = {
+    //(): ExpressionType[];
+    execute: P;
     return_type: T;
     grouped: U;
-    parameters: P;
+    //parameters: P;
     precedence: number;
 };
+export type ExpressionF<T extends TableType> = (parameters: T, names: {[key: string]: string}, args: SQLType[]) => string;
 
 //This interface represents an instance of a table that has been aliased to a certain name, such as during a FROM clause in a SELECT statement.
 export type TableExpression<T extends TableType, P extends TableType> = {

@@ -1,4 +1,4 @@
-import { Expression, SQLType, ExpressionType, TableType, TableProvider } from "./queries";
+import { Expression, SQLType, ExpressionType, TableType, TableProvider, JSONType, ExpressionF } from "./queries";
 
 //https://stackoverflow.com/questions/50374908/transform-union-type-to-intersection-type
 export type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends ((k: infer I) => void) ? I : never;
@@ -7,28 +7,92 @@ export function identifier(id: string): string {
     return "\"" + id.replace(/"/g, "\"\"") + "\"";
 }
 
-export function expression<T extends SQLType, U extends boolean, P extends TableType>(expr: ExpressionType[], precedence: number): Expression<T, U, P> {
-    return <Expression<T, U, P>> Object.assign(() => expr, {precedence});
+export function addPhantomProperties<T extends SQLType, U extends boolean, V>(arg: V): V & {grouped: U, return_type: T} {
+    return arg as V & {grouped: U, return_type: T};
 }
 
-export function exprToStr(expression: SQLType | Expression<SQLType, boolean, TableType>, outerPrecednece: number): ExpressionType[] {
-    var res: ExpressionType[];
-    var parentheses = outerPrecednece > 99;
+export function expression<T extends SQLType, U extends boolean, E extends Expression<SQLType, boolean, (parameters: never, names: {[key: string]: string}, args: SQLType[]) => string>[]>(expr: E, precedence: number): Expression<T, U, E[number]['execute']> {
+    var exec: E[number]['execute'] = function(parameters, names, args) {
+        return expr.map(x => {
+            if (precedence > x.precedence) {
+                return "(" + x.execute(parameters, names, args) + ")";
+            } else {
+                return x.execute(parameters, names, args)
+            }
+        }).join("");
+    }
+    return addPhantomProperties({
+        execute: exec,
+        precedence: precedence
+    });
+}
 
-    if (typeof expression === 'function') {
-        res = expression();
-        parentheses = outerPrecednece > expression.precedence;
-    } else if (typeof expression === 'number' || typeof expression === 'string' || typeof expression === 'boolean' || expression instanceof BigInt || expression instanceof Buffer || expression instanceof Date || 'json' in expression) {
-        res = [{
-            value: expression
-        }];
-    } else if (expression instanceof Array) {
-        res = ["B'" + expression.map(x => (x ? "1" : "0")).join("") + "'"];
-    } else {
-        throw Error("Bad type! " + typeof expression);
+function r(value: SQLType): Expression<SQLType, true, ExpressionF<{}>> {
+    var exec = function(parameters: {}, names: {[key: string]: string}, args: SQLType[]) {
+        args.push(value);
+        return "$" + args.length;
     }
 
-    return parentheses ? ["(",  ...res, ")"] : res;
+    return addPhantomProperties({
+        execute: exec,
+        precedence: 99
+    });
+}
+
+export function raw(value: string): Expression<string, true, ExpressionF<{}>>;
+export function raw(value: number): Expression<number, true, ExpressionF<{}>>;
+export function raw(value: boolean): Expression<boolean, true, ExpressionF<{}>>;
+export function raw(value: boolean[]): Expression<boolean[], true, ExpressionF<{}>>; //TODO: this needs to be done differently
+export function raw(value: Buffer): Expression<Buffer, true, ExpressionF<{}>>;
+export function raw(value: bigint): Expression<bigint, true, ExpressionF<{}>>;
+export function raw(value: Date): Expression<Date, true, ExpressionF<{}>>;
+export function raw(value: JSONType): Expression<JSONType, true, ExpressionF<{}>>;
+export function raw(value: SQLType): Expression<SQLType, true, ExpressionF<{}>> {
+    return r(value);
+}
+
+export function $s<K extends string>(id: K): Expression<string, true, ExpressionF<{[key in K]: string}>> {
+    return $<string, K>(id);
+}
+export function $n<K extends string>(id: K): Expression<number, true, ExpressionF<{[key in K]: number}>> {
+    return $<number, K>(id);
+}
+export function $b<K extends string>(id: K): Expression<boolean, true, ExpressionF<{[key in K]: boolean}>> {
+    return $<boolean, K>(id);
+}
+export const $d = <K extends string>(id: K) => $<Date, K>(id);
+
+export function $<T extends SQLType, K extends string>(id: K): Expression<T, true, ExpressionF<{[key in K]: T}>> {
+    var exec = function(parameters: {[key in K]: T}, names: {[key: string]: string}, args: SQLType[]) {
+        if (names[id] == null) {
+            args.push(parameters[id]);
+            names[id] = "$" + args.length;
+        }
+
+        return names[id];
+    }
+    return addPhantomProperties({
+        execute: exec,
+        precedence: 99
+    });
+}
+
+export type ToExpression<T extends SQLType | Expression<SQLType, boolean, ExpressionF<never>>> = T extends SQLType ? Expression<T, true, ExpressionF<{}>> : T;
+export function rawOrExpression<T extends SQLType | Expression<SQLType, boolean, ExpressionF<never>>>(arg: T): ToExpression<T>;
+export function rawOrExpression(arg: SQLType | Expression<SQLType, boolean, ExpressionF<never>>): Expression<SQLType, boolean, ExpressionF<never>> {
+    if (typeof arg === 'object' && 'precedence' in arg) {
+        return arg;
+    } else {
+        return r(arg);
+    }
+}
+
+export function withParentheses(a: string, parentheses: boolean): string {
+    if (parentheses) {
+        return "(" + a + ")";
+    } else {
+        return a;
+    }
 }
 
 //https://stackoverflow.com/questions/53966509/typescript-type-safe-omit-function

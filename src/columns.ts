@@ -182,7 +182,7 @@ export class DBInteger extends LengthColumn<number> {
     }
 }
 
-export class DBBigIncrements extends Column<BigInt> {
+export class DBBigIncrements extends Column<bigint> {
     static SerializedType = ColumnType(Column, "bigincrements");
 
     getSQLType() {
@@ -207,7 +207,7 @@ export class DBBigIncrements extends Column<BigInt> {
     }
 }
 
-export class DBBigInteger extends LengthColumn<BigInt> {
+export class DBBigInteger extends LengthColumn<bigint> {
     static SerializedType = ColumnType(LengthColumn, "biginteger");
 
     getSQLType() {
