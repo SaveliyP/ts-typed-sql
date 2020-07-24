@@ -1,6 +1,6 @@
-import { TableExpression, TableProvider, SQLType, TableType } from './queries';
+import { TableExpression, TableProvider, SQLType, TableType, ExpressionF } from './queries';
 import { Column, deserializeColumn } from './columns';
-import { identifier, expression } from './utils';
+import { identifier, expression, expres } from './utils';
 import { dict, str, array, strDict } from 'type-builder';
 import { isDeepStrictEqual } from 'util';
 
@@ -38,17 +38,17 @@ declare class AbstractModelClass<T extends TableType> {
     protected columns: ModelDefinition<T>;
 }
 
-type ModelClass<T extends TableType> = TableProvider<T, {}> & AbstractModelClass<T>;
+type ModelClass<T extends TableType> = TableProvider<T, ExpressionF<{}>> & AbstractModelClass<T>;
 const ModelClass = function<T extends TableType>(this: ModelClass<T>, name: string, obj: TableDefinition<T>): ModelClass<T> {
-    function Model(): string;
-    function Model(alias: string): TableExpression<T, {}>;
-    function Model(alias?: string): TableExpression<T, {}> | string {
+    function Model(): ExpressionF<{}>;
+    function Model(alias: string): TableExpression<T, ExpressionF<{}>>;
+    function Model(alias?: string): TableExpression<T, ExpressionF<{}>> | ExpressionF<{}> {
         if (alias == null) {
-            return identifier(res.modelName);
+            return () => () => identifier(res.modelName);
         } else {
-            var expr: TableExpression<T, {}> = <any> {}; //TODO: <any>
+            var expr: TableExpression<T, ExpressionF<{}>> = <any> {}; //TODO: <any>
             for (var key in res.columns) {
-                expr[key] = expression([identifier(alias) + "." + identifier(key)], 99);
+                expr[key] = expres((names, args) => (parameters) => identifier(alias) + "." + identifier(key), 99);
             }
             return expr;
         }

@@ -1,7 +1,8 @@
 import { Model, generateMigration } from "./model";
 import { DBIncrements, DBEnum, DBString, DBBinary, DBInteger, DBTimestamp } from "./columns";
-import { op, avg, and, $, $b, $s } from "./expressions";
+import { op, avg, and } from "./expressions";
 import { database } from "./database";
+import { $b, $s, $ } from "./utils";
 
 const Picture = new Model("picture", {
     id: new DBIncrements(),
@@ -57,7 +58,7 @@ db.with({
 }).from({
     a: "a",
     b: "b"
-}).where(t => and(op(t.a.id, '=', t.b.profile_picture), op(t.b.id, '=', $<number, "id">("id")), $b("yes")));
+}).where(t => and(op(t.a.id, '=', t.b.profile_picture), op(t.b.id, '=', $<number, "id">("id")), $b("yes"))).select(a => ({})).execute();
 
 db.with({
     a: Picture,
@@ -81,7 +82,9 @@ db.from({
 db.select(t => ({
     a1: 17,
     a2: "test"
-})).execute().then(s => {
+})).execute({
+    
+}).then(s => {
 }, r => {
     console.log(r);
 });
@@ -121,7 +124,9 @@ db.with({
         average_picture_height: avg(p.height),
         test: $s("string_parameter_3")
     };
-}).execute().then(result => {
+}).execute({
+    
+}).then(result => {
     console.log(result);
     result.forEach(x => {
         x.average_picture_height.toExponential(16);

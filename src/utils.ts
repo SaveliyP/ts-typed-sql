@@ -11,13 +11,15 @@ export function addPhantomProperties<T extends SQLType, U extends boolean, V>(ar
     return arg as V & {grouped: U, return_type: T};
 }
 
-export function expression<T extends SQLType, U extends boolean, E extends Expression<SQLType, boolean, (parameters: never, names: {[key: string]: string}, args: SQLType[]) => string>[]>(expr: E, precedence: number): Expression<T, U, E[number]['execute']> {
-    var exec: E[number]['execute'] = function(parameters, names, args) {
-        return expr.map(x => {
+export function expression<T extends SQLType, U extends boolean, E extends Expression<SQLType, boolean, ExpressionF<never>>[]>(expr: E, precedence: number): Expression<T, U, E[number]['execute']> {
+    var exec: E[number]['execute'] = function(names, args) {
+        const exprM = expr.map(x => ({precedence: x.precedence, execute: x.execute(names, args)}));
+
+        return (parameters) => exprM.map(x => {
             if (precedence > x.precedence) {
-                return "(" + x.execute(parameters, names, args) + ")";
+                return "(" + x.execute(parameters) + ")";
             } else {
-                return x.execute(parameters, names, args)
+                return x.execute(parameters);
             }
         }).join("");
     }
@@ -27,10 +29,25 @@ export function expression<T extends SQLType, U extends boolean, E extends Expre
     });
 }
 
+export function expres<T extends SQLType, U extends boolean, E extends ExpressionF<never>>(expr: E, precedence: number): Expression<T, U, E> {
+    return addPhantomProperties({
+        execute: expr,
+        precedence: precedence
+    });
+}
+
+export function mapRawExpression(precedence: number, parameters: never, names: {[key: string]: number}, args: SQLType[]): ((x: SQLType | Expression<SQLType, boolean, ExpressionF<never>>) => string) {
+    return x => {
+        const y = rawOrExpression(x);
+        return withParentheses(y.execute(names, args)(parameters), precedence > y.precedence);
+    };
+}
+
 function r(value: SQLType): Expression<SQLType, true, ExpressionF<{}>> {
-    var exec = function(parameters: {}, names: {[key: string]: string}, args: SQLType[]) {
+    var exec = function(names: {[key: string]: number}, args: SQLType[]) {
         args.push(value);
-        return "$" + args.length;
+        const pId = args.length;
+        return (parameters: {}) => "$" + pId;
     }
 
     return addPhantomProperties({
@@ -63,13 +80,15 @@ export function $b<K extends string>(id: K): Expression<boolean, true, Expressio
 export const $d = <K extends string>(id: K) => $<Date, K>(id);
 
 export function $<T extends SQLType, K extends string>(id: K): Expression<T, true, ExpressionF<{[key in K]: T}>> {
-    var exec = function(parameters: {[key in K]: T}, names: {[key: string]: string}, args: SQLType[]) {
-        if (names[id] == null) {
-            args.push(parameters[id]);
-            names[id] = "$" + args.length;
-        }
+    var exec = function(names: {[key: string]: number}, args: SQLType[]) {
+        return function(parameters: {[key in K]: T}) {
+            if (names[id] == null) {
+                args.push(parameters[id]);
+                names[id] = args.length;
+            }
 
-        return names[id];
+            return "$" + names[id];
+        }
     }
     return addPhantomProperties({
         execute: exec,
