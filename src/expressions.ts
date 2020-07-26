@@ -1,5 +1,5 @@
-import { Expression, SQLType, ToSQLType, ExpressionF } from './queries';
-import { rawOrExpression, withParentheses, addPhantomProperties, $b, mapRawExpression } from './utils';
+import { Expression, SQLType, ExpressionF } from './query_types';
+import { addPhantomProperties, mapRawExpression } from './utils';
 
 //TODO: rewrite this with function overloading instead of whatever this is...
 
@@ -277,7 +277,8 @@ export function not<T extends NotType | Expression<NotType, boolean, ExpressionF
 }
 
 type AvgType = number | bigint;
-export function avg<U extends AvgType>(a: U): Expression<ToSQLType<U> extends AvgType ? ToSQLType<U> : never, true, ExpressionF<{}>>;
+export function avg(a: number): Expression<number, true, ExpressionF<{}>>;
+export function avg(a: bigint): Expression<bigint, true, ExpressionF<{}>>;
 export function avg<U extends Expression<AvgType, boolean, ExpressionF<never>>>(a: U): Expression<U['return_type'], true, U['execute']>;
 export function avg<U extends AvgType | Expression<AvgType, boolean, ExpressionF<never>>>(a: U): Expression<AvgType, true, ExpressionF<never>> {
     const PRECEDENCE = 99;

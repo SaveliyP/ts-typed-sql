@@ -1,6 +1,6 @@
-import { TableExpression, TableProvider, SQLType, TableType, ExpressionF } from './queries';
+import { TableExpression, TableProvider, SQLType, TableType, ExpressionF } from './query_types';
 import { Column, deserializeColumn } from './columns';
-import { identifier, expression, expres } from './utils';
+import { identifier, expres } from './utils';
 import { dict, str, array, strDict } from 'type-builder';
 import { isDeepStrictEqual } from 'util';
 
@@ -14,10 +14,10 @@ type ModelDefinition<T extends TableType> = {
 
 class ModelColumn<T extends Column<SQLType>> {
     name: string;
-    model: ModelClass<any>;
+    model: ModelClass<TableType>;
     column: T;
 
-    constructor(name: string, model: ModelClass<any>, column: T) {
+    constructor(name: string, model: ModelClass<TableType>, column: T) {
         this.name = name;
         this.model = model;
         this.column = column;
@@ -25,7 +25,7 @@ class ModelColumn<T extends Column<SQLType>> {
 }
 
 function mapValues<T extends TableType>(obj: TableDefinition<T>, mdl: ModelClass<T>): ModelDefinition<T> {
-    var res: ModelDefinition<T> = <any>{};
+    var res: ModelDefinition<T> = <any> {};
     for (var k in obj) {
         res[k] = new ModelColumn(k, mdl, obj[k]);
     }
@@ -47,8 +47,8 @@ const ModelClass = function<T extends TableType>(this: ModelClass<T>, name: stri
             return () => () => identifier(res.modelName);
         } else {
             var expr: TableExpression<T, ExpressionF<{}>> = <any> {}; //TODO: <any>
-            for (var key in res.columns) {
-                expr[key] = expres((names, args) => (parameters) => identifier(alias) + "." + identifier(key), 99);
+            for (let key in res.columns) {
+                expr[key] = expres(() => () => identifier(alias) + "." + identifier(key), 99);
             }
             return expr;
         }
@@ -84,9 +84,9 @@ type ForeignKeyM = {
 
 //Get out of non-TypeScript as soon as possible. Every additional functionality should only operate on Model.
 export class Model<T extends TableType> extends ModelClass<T> {
-    protected primaryKey: Extract<keyof T, string>[] = [];
-    protected uniqueKeys: Extract<keyof T, string>[][] = [];
-    protected indices: Extract<keyof T, string>[][] = [];
+    protected primaryKey: string[] = [];
+    protected uniqueKeys: string[][] = [];
+    protected indices: string[][] = [];
     protected foreignKeys: ForeignKeyM[] = [];
 
     //TODO: Move all migrations to operate outside of Model in migrations.ts

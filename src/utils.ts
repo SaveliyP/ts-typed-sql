@@ -1,7 +1,4 @@
-import { Expression, SQLType, ExpressionType, TableType, TableProvider, JSONType, ExpressionF } from "./queries";
-
-//https://stackoverflow.com/questions/50374908/transform-union-type-to-intersection-type
-export type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends ((k: infer I) => void) ? I : never;
+import { Expression, SQLType, JSONType, ExpressionF } from "./query_types";
 
 export function identifier(id: string): string {
     return "\"" + id.replace(/"/g, "\"\"") + "\"";
@@ -130,19 +127,6 @@ function omit<T extends object, K extends [...(keyof T)[]]>(obj: T, ...keys: K):
     return ret;
 }
 
-function keys<T extends {}>(obj: T): (keyof T)[] {
-    var result: (keyof T)[] = [];
-    var k: keyof T;
-    for (k in obj) {
-        result.push(k);
-    }
-    return result;
-}
-
 export function replace<T extends {}, K extends keyof T, U extends any>(obj: T, key: K, target: U): {[key in keyof T]: key extends K ? (K extends key ? U : T[key]) : T[key]} {
     return  <any> {...omit(obj, key), [key]: target}; //TODO: remove <any>
 }
-
-export function repl<T extends {}, U extends {}>(obj: T, target: U): {[key in (keyof T) | (keyof U)]: key extends keyof U ? U[key] : key extends keyof T ? T[key] : never} {
-    return <any>{...obj, ...target};
-} 

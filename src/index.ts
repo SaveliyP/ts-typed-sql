@@ -43,43 +43,17 @@ database({
     database: "postgres"
 }).then(db => {
 
-db.with({
-    asdf: Picture
-}).from({
-    a: "asdf",
-    b: Picture
-}).select(t => ({
-    x: t.a.id
-}));
-
-db.with({
+/*db.from({
     a: Picture,
     b: User
-}).from({
-    a: "a",
-    b: "b"
-}).where(t => and(op(t.a.id, '=', t.b.profile_picture), op(t.b.id, '=', $<number, "id">("id")), $b("yes"))).select(a => ({})).execute();
+}).where(t => and(op(t.a.id, '=', t.b.profile_picture), op(t.b.id, '=', $<number, "id">("id")), $b("yes"))).select(a => ({
+    x: 15
+})).execute({
+    id: 1,
+    yes: true
+});*/
 
-db.with({
-    a: Picture,
-    b: User,
-    c: Picture
-}).from({
-    a: Picture,
-    s: "a"
-});
-
-db.from({
-    a: Picture
-});
-
-db.from({
-    p: Picture
-}).select(t => ({
-    
-}));
-
-db.select(t => ({
+/*db.select(t => ({
     a1: 17,
     a2: "test"
 })).execute({
@@ -87,12 +61,14 @@ db.select(t => ({
 }).then(s => {
 }, r => {
     console.log(r);
-});
+});*/
 
-/*BeginQuery.from([User, Picture]).select(t => ({
-    a: t[0].id,
-    b: t[1].height
-}));*/
+db.deleteFrom(Picture).where(t => op(t.id, '=', 2)).returning(t => ({
+    w: t.width,
+    h: t.height
+})).execute({}).then(x => {
+    
+});
 
 //TODO: Cannot use a table in a WITH statement!
 db.with({
@@ -125,7 +101,13 @@ db.with({
         test: $s("string_parameter_3")
     };
 }).execute({
-    
+    a: true,
+    b: "hello",
+    always_true: true,
+    bool_param: true,
+    string_parameter: "",
+    string_parameter2: "hello2",
+    string_parameter_3: "hello_3"
 }).then(result => {
     console.log(result);
     result.forEach(x => {

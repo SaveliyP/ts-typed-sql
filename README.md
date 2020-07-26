@@ -165,20 +165,19 @@ Result {
 Generated (but did not execute) the query: TypeError: x.average_picture_height.toExponential is not a function
 ```
 
-AVG returns a string, most likely because that's how `pg` returns DECIMALs. The `pg_type` of `picture_width` is integer, but the `pg_type` of `average_picture_height` is numeric.
-
 ### TODO:
 
- - Finish work on parameterized queries
- - Execute queries with parameters
+ - INSERT
+ - UPDATE
+ - Register more types for pg-types
  - Right now, only implicit inner joins work with FROM clause. Need to add explicit joins.
- - INSERT, UPDATE, DELETE
  - Prepared queries
- - Allow passing tables as parameters into FROM
+ - Allow passing tables as parameters into .from()
  - Add more operators and functions
  - Some final bits and pieces for migration code
  - Extra syntax and options for model columns to fully implement CREATE TABLE
  - Add support for more syntax
+ - CURSORs
  - Result streaming
  - MySQL & extendable dialect support
  - Continue adding precedence to reduce parentheses (probably not that important and a potential place to introduce errors)

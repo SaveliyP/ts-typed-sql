@@ -1,4 +1,4 @@
-import { SQLType, JSONType } from './queries';
+import { SQLType, JSONType } from './query_types';
 import { TypeChecker, dict, optional, bool, str, intersection, num, array, union } from 'type-builder';
 
 function ColumnType<T extends string, U extends {}>(x: {SerializedType: TypeChecker<U>}, y: T) {

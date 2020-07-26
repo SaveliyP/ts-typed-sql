@@ -1,6 +1,5 @@
 export type JSONType = {json: Object};
 export type SQLType = string | number | boolean | boolean[] | Buffer | bigint | Date | JSONType;
-export type ToSQLType<T> = T extends string ? string : (T extends number ? number : (T extends boolean ? boolean : (T extends boolean[] ? boolean[] : (T extends Buffer ? Buffer : (T extends bigint ? bigint : (T extends Date ? Date : (T extends JSONType ? JSONType : never)))))));
 
 export type TableType = {
     [key: string]: SQLType;
