@@ -70,6 +70,30 @@ db.deleteFrom(Picture).where(t => op(t.id, '=', 2)).returning(t => ({
     
 });
 
+db.into(Picture).insert({
+    id: 1,
+    height: 15,
+    time: new Date(69420),
+    width: 420,
+    uploader: 1
+}).execute({}).then(x => {
+    
+});
+
+db.with({
+    a: db.select(x => ({
+        a: 2,
+        b: 4
+    }))
+}).update(Picture).using({
+    test: User,
+    test2: "a"
+}).set((t, u) => ({
+    width: op(t.width, '*', u.test2.a)
+})).execute({}).then(x => {
+    
+});
+
 //TODO: Cannot use a table in a WITH statement!
 db.with({
     //pp: Picture,

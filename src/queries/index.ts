@@ -26,5 +26,13 @@ export default function(db: pg.Client) {
         deleteFrom<D extends TableType>(from: Model<D>): DeleteStatement<{}, ExpressionF<{}>, D> {
             return new WithQuery<{}, ExpressionF<{}>>(db, {}, false).deleteFrom(from);
         },
+
+        into<I extends TableType>(into: Model<I>) {
+            return new WithQuery<{}, ExpressionF<{}>>(db, {}, false).into(into);
+        },
+
+        update<U extends TableType>(model: Model<U>) {
+            return new WithQuery<{}, ExpressionF<{}>>(db, {}, false).update(model);
+        }
     };
 }

@@ -37,7 +37,7 @@ export type TableExpressions<T extends TableTypes, P extends ExpressionF<never>>
 //This interface represents anything that can provide a table, such as models, other SELECT statements, or DML statements with a RETURNING clause.
 export interface TableProvider<T extends TableType, P extends ExpressionF<never>> {
     (): P; //How to get this table (e.g. "tablename" for models or the select statement of a subquery)
-    (alias: string): TableExpression<T, P>; //Provides accessors to all columns given the tables new alias
+    (alias: string): TableExpression<T, ExpressionF<{}>>; //Provides accessors to all columns given the tables new alias
     type: T;
     parameters: P;
 }

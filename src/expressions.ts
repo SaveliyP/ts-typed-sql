@@ -86,9 +86,13 @@ export function op
 Expression<boolean[], AllGrouped<A | B>, ParameterType<A | B>>;
 
 export function op
-<T extends number | bigint, A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>>
+<A extends number | Expression<number, boolean, ExpressionF<never>>, B extends number | Expression<number, boolean, ExpressionF<never>>>
 (a: A, op: aMathOperators, b: B):
-Expression<T, AllGrouped<A | B>, ParameterType<A | B>>;
+Expression<number, AllGrouped<A | B>, ParameterType<A | B>>;
+export function op
+<A extends bigint | Expression<bigint, boolean, ExpressionF<never>>, B extends bigint | Expression<bigint, boolean, ExpressionF<never>>>
+(a: A, op: aMathOperators, b: B):
+Expression<bigint, AllGrouped<A | B>, ParameterType<A | B>>;
 
 export function op
 <T extends SQLType, A extends T | Expression<T, boolean, ExpressionF<never>>, B extends T | Expression<T, boolean, ExpressionF<never>>>

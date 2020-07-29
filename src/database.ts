@@ -1,5 +1,5 @@
 import * as pg from 'pg';
-import base from './queries';
+import base from './queries/index';
 
 //TODO: register all possible types
 pg.types.setTypeParser(1700, str => {
@@ -10,7 +10,7 @@ export async function database(options: string | pg.ClientConfig) {
     const db = new pg.Client(options);
     const b = base(db);
 
-    await db.connect();
+    //await db.connect();
 
     return {
         with: b.withT,
@@ -19,6 +19,10 @@ export async function database(options: string | pg.ClientConfig) {
         from: b.from,
         select: b.select,
 
-        deleteFrom: b.deleteFrom
+        deleteFrom: b.deleteFrom,
+
+        into: b.into,
+
+        update: b.update,
     };
 }

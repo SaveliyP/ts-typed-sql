@@ -1,15 +1,15 @@
 import { Expression, TableExpression, TableProvider, TableProviders, TableType, TableTypes, SQLType, ExpressionF } from '../query_types';
-import { identifier, replace, expres, mapRawExpression, ToExpression } from '../utils';
+import { identifier, replace, expres, mapRawExpression, ToExpression, createTableProvider, createTableExpression } from '../utils';
 import { Model } from '../model';
 
 import * as pg from 'pg';
 
-interface CompleteDeleteQuery<CTE extends TableTypes, P extends ExpressionF<never>, D extends TableType, S extends TableType> {
+interface CompleteDeleteQuery<CTE extends TableTypes, P extends ExpressionF<never>, D extends TableType, R extends TableType> {
     recursiveWith: boolean;
     cte: TableProviders<CTE, P>;
     from: Model<D>;
     conditions: Expression<boolean, boolean, P>[];
-    returning: {[key in keyof S]: Expression<S[key], boolean, P> | S[key]};
+    returning: {[key in keyof R]: Expression<R[key], boolean, P> | R[key]};
 }
 
 function toQuery
@@ -25,7 +25,7 @@ function toQuery
     }
 
     function getFrom() {
-        return "DELETE FROM " + deleteStmt.from() + " AS " + JSON.stringify("__deleting");
+        return "DELETE FROM " + deleteStmt.from()(names, args)(parameters) + " AS " + JSON.stringify("__deleting");
     }
 
     function getWhere() {
@@ -55,21 +55,9 @@ const DeleteStatementClass = function<CTE extends TableTypes, P extends Expressi
         return (parameters: never) => toQuery(query, parameters, names, args);
     } as unknown as P; //TODO: type-cast
 
-    function DeleteStatementClass(): P;
-    function DeleteStatementClass(alias: string): TableExpression<R, P>;
-    function DeleteStatementClass(alias?: string): TableExpression<R, P> | P {
-        if (alias == null) {
-            return AsTableExpression;
-        } else {
-            var expr: TableExpression<R, P> = <any> {}; //TODO: <any>
-            for (let key in query.returning) {
-                expr[key] = expres(<any> (() => () => identifier(alias) + "." + identifier(key)), 99); //TODO: <any>
-            }
-            return expr;
-        }
-    }
+    const DeleteStatementClass = createTableProvider(createTableExpression(query.returning), AsTableExpression);
     Object.setPrototypeOf(DeleteStatementClass, Object.getPrototypeOf(this)); //TODO: rethink better way to implement this
-    return (function<T>(a: T): T & {type: R, parameters: P} {return <any> a;})(DeleteStatementClass);
+    return DeleteStatementClass;
 } as unknown as new <CTE extends TableTypes, P extends ExpressionF<never>, D extends TableType, R extends TableType>(query: CompleteDeleteQuery<CTE, P, D, R>) => DeleteStatementClass<CTE, P, D, R>;
 
 type CalculateParameter<T extends ExpressionF<never>> = [T] extends [ExpressionF<infer P>] ? P : never;

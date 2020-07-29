@@ -1,11 +1,12 @@
 import { Expression, TableExpression, TableExpressions, TableProvider, TableProviders, TableType, TableTypes, SQLType, ExpressionF } from '../query_types';
-import { identifier, replace, expres, mapRawExpression, ToExpression, withParentheses } from '../utils';
+import { identifier, replace, expres, mapRawExpression, ToExpression, withParentheses, createTableProvider, createTableExpression } from '../utils';
 
 import * as pg from 'pg';
 
 export type FromClause<CTE extends TableTypes, P extends ExpressionF<never>> = {[key: string]: TableProvider<TableType, P> | keyof CTE};
 type ArrFromClause<CTE extends TableTypes, P extends ExpressionF<never>> = ((TableProvider<TableType, P> | keyof CTE)[] & {"0": any}) | [];
-type FromClauseType<CTE extends TableTypes, T extends FromClause<CTE, ExpressionF<never>>> = {[key in keyof T]: T[key] extends keyof CTE ? CTE[T[key]] : (T[key] extends TableProvider<infer R, ExpressionF<never>> ? R : never)};
+export type FromClauseType<CTE extends TableTypes, T extends FromClause<CTE, ExpressionF<never>>> = {[key in keyof T]: T[key] extends keyof CTE ? CTE[T[key]] : (T[key] extends TableProvider<infer R, ExpressionF<never>> ? R : never)};
+export type FromClauseProviders<T> = T extends TableProvider<TableType, ExpressionF<never>> ? T : never;
 
 type GroupClause<P extends ExpressionF<never>> = {[key: string]: Expression<SQLType, true, P>};
 
@@ -22,8 +23,8 @@ interface CompleteSelectQuery<CTE extends TableTypes, P extends ExpressionF<neve
     offset?: number;
 }
 
-function transformFrom<CTE extends TableTypes, P extends ExpressionF<never>, T extends FromClause<CTE, P>>(cte: TableProviders<CTE, P>, from: T) {
-    const transformed: TableExpressions<FromClauseType<CTE, T>, P> = <any> {}; //TODO: <any> is bad, there probably exists some type that can cause errors
+export function transformFrom<CTE extends TableTypes, P extends ExpressionF<never>, T extends FromClause<CTE, P>>(cte: TableProviders<CTE, P>, from: T) {
+    const transformed: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>> = <any> {}; //TODO: <any> is bad, there probably exists some type that can cause errors
     for (const x in from) {
         const fn = from[x];
         if (typeof fn === 'string') {
@@ -124,7 +125,7 @@ type ConvertGroupedQuery<Q extends ExpressionF<never>, G extends {[key: string]:
 export class FromQuery<CTE extends TableTypes, P extends ExpressionF<never>, T extends FromClause<CTE, P>> {
     private db: pg.Client;
     private query: CompleteSelectQuery<CTE, P, T, {}, {}>;
-    private from: TableExpressions<FromClauseType<CTE, T>, P>
+    private from: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>>
 
     constructor(db: pg.Client, query: CompleteSelectQuery<CTE, P, T, {}, {}>) {
         this.db = db;
@@ -132,16 +133,16 @@ export class FromQuery<CTE extends TableTypes, P extends ExpressionF<never>, T e
         this.from = transformFrom(query.cte, query.from);
     }
 
-    where<Q extends ExpressionF<never>>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, P>) => Expression<boolean, boolean, P | Q>): FromQuery<CTE, P | Q, T> {
+    where<Q extends ExpressionF<never>>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>>) => Expression<boolean, boolean, P | Q>): FromQuery<CTE, P | Q, T> {
         return new FromQuery(this.db, replace(this.query, "conditions", [...this.query.conditions, lambda(this.from)]));
     }
 
-    groupBy<G extends {[key: string]: Expression<SQLType, boolean, ExpressionF<never>>}>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, P>) => G): GroupedQuery<CTE, P | G[keyof G]['execute'], T, ConvertGroupedQuery<P | G[keyof G]['execute'], G>> {
+    groupBy<G extends {[key: string]: Expression<SQLType, boolean, ExpressionF<never>>}>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>>) => G): GroupedQuery<CTE, P | G[keyof G]['execute'], T, ConvertGroupedQuery<P | G[keyof G]['execute'], G>> {
         const groups: ConvertGroupedQuery<P | G[keyof G]['execute'], G> = <any> lambda(this.from);
         return new GroupedQuery<CTE, P | G[keyof G]['execute'], T, ConvertGroupedQuery<P | G[keyof G]['execute'], G>>(this.db, replace(this.query, "groups", groups), this.from);
     }
 
-    select<S extends {[key: string]: Expression<SQLType, boolean, ExpressionF<never>> | SQLType}>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, P>) => S): SelectStatement<CTE, P | ToExpression<S[keyof S]>['execute'], T, {}, {[key in keyof S]: ToExpression<S[key]>['return_type']}> {
+    select<S extends {[key: string]: Expression<SQLType, boolean, ExpressionF<never>> | SQLType}>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>>) => S): SelectStatement<CTE, P | ToExpression<S[keyof S]>['execute'], T, {}, {[key in keyof S]: ToExpression<S[key]>['return_type']}> {
         const select = lambda(this.from);
         const res: CompleteSelectQuery<CTE, P | ToExpression<S[keyof S]>['execute'], T, {}, {[key in keyof S]: ToExpression<S[key]>['return_type']}> = replace(this.query, "selected", select);
         return new SelectStatement(this.db, res);
@@ -170,27 +171,15 @@ class GroupedQuery<CTE extends TableTypes, P extends ExpressionF<never>, T exten
     }
 }
 
-type SelectStatementClass<CTE extends TableTypes, P extends ExpressionF<never>, T extends FromClause<CTE, P>, G extends {[key: string]: Expression<SQLType, true, P>}, S extends TableType> = TableProvider<S, P>;
-const SelectStatementClass = function<CTE extends TableTypes, P extends ExpressionF<never>, T extends FromClause<CTE, P>, G extends {[key: string]: Expression<SQLType, true, P>}, S extends TableType>(this: SelectStatementClass<CTE, P, T, G, S>, query: CompleteSelectQuery<CTE, P, T, G, S>): SelectStatementClass<CTE, P, T, G, S> {
+export type SelectStatementClass<CTE extends TableTypes, P extends ExpressionF<never>, T extends FromClause<CTE, P>, G extends {[key: string]: Expression<SQLType, true, P>}, S extends TableType> = TableProvider<S, P>;
+export const SelectStatementClass = function<CTE extends TableTypes, P extends ExpressionF<never>, T extends FromClause<CTE, P>, G extends {[key: string]: Expression<SQLType, true, P>}, S extends TableType>(this: SelectStatementClass<CTE, P, T, G, S>, query: CompleteSelectQuery<CTE, P, T, G, S>): SelectStatementClass<CTE, P, T, G, S> {
     const AsTableExpression: P = function AsTableExpression(names: {[key: string]: number}, args: SQLType[]) {
         return (parameters: never) => toQuery(query, parameters, names, args);
     } as unknown as P; //TODO: type-cast
 
-    function SelectStatementClass(): P;
-    function SelectStatementClass(alias: string): TableExpression<S, P>;
-    function SelectStatementClass(alias?: string): TableExpression<S, P> | P {
-        if (alias == null) {
-            return AsTableExpression;
-        } else {
-            var expr: TableExpression<S, P> = <any> {}; //TODO: <any>
-            for (let key in query.selected) {
-                expr[key] = expres(<any> (() => () => identifier(alias) + "." + identifier(key)), 99); //TODO: <any>
-            }
-            return expr;
-        }
-    }
+    const SelectStatementClass = createTableProvider(createTableExpression(query.selected), AsTableExpression);
     Object.setPrototypeOf(SelectStatementClass, Object.getPrototypeOf(this)); //TODO: rethink better way to implement this
-    return (function<T>(a: T): T & {type: S, parameters: P} {return <any> a;})(SelectStatementClass);
+    return SelectStatementClass;
 } as unknown as new <CTE extends TableTypes, P extends ExpressionF<never>, T extends FromClause<CTE, P>, G extends {[key: string]: Expression<SQLType, true, P>}, S extends TableType>(query: CompleteSelectQuery<CTE, P, T, G, S>) => SelectStatementClass<CTE, P, T, G, S>;
 
 type CalculateParameter<T extends ExpressionF<never>> = [T] extends [ExpressionF<infer P>] ? P : never;

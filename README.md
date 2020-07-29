@@ -167,13 +167,18 @@ Generated (but did not execute) the query: TypeError: x.average_picture_height.t
 
 ### TODO:
 
- - INSERT
- - UPDATE
+ - Subqueries need to have access to base query tables
+   - SELECT.where() should be (from, groups, with) => expr.
+   - SELECT.having() should be (from, groups, with) => expr.
+   - DELETE.where() should be (from, groups, with) => expr.
+   - UPDATE.set() should be (update, using, with) => expr.
  - Register more types for pg-types
+   - Figure out type system
+ - Add more operators and functions
+ - WITH should prefix table names with __ to prevent collisions
  - Right now, only implicit inner joins work with FROM clause. Need to add explicit joins.
  - Prepared queries
  - Allow passing tables as parameters into .from()
- - Add more operators and functions
  - Some final bits and pieces for migration code
  - Extra syntax and options for model columns to fully implement CREATE TABLE
  - Add support for more syntax

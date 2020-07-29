@@ -1,4 +1,4 @@
-import { Expression, SQLType, JSONType, ExpressionF } from "./query_types";
+import { Expression, SQLType, JSONType, ExpressionF, TableType, TableExpression } from "./query_types";
 
 export function identifier(id: string): string {
     return "\"" + id.replace(/"/g, "\"\"") + "\"";
@@ -111,14 +111,37 @@ export function withParentheses(a: string, parentheses: boolean): string {
     }
 }
 
+export function createTableExpression<T extends TableType>(columns: {[key in keyof T]: T[key] | Expression<T[key], boolean, ExpressionF<never>>}): (alias: string) => TableExpression<T, ExpressionF<{}>> {
+    return function ColumnExpressions(alias: string): TableExpression<T, ExpressionF<{}>> {
+        var expr: TableExpression<T, ExpressionF<{}>> = <any> {}; //TODO: <any>
+        for (let key in columns) {
+            expr[key] = expres(() => () => identifier(alias) + "." + identifier(key), 99);
+        }
+        return expr;
+    }
+}
+
+export function createTableProvider<T extends TableType, P extends ExpressionF<never>>(columns: (alias: string) => TableExpression<T, ExpressionF<{}>>, AsTableExpression: P) {
+    function Statement(): P;
+    function Statement(alias: string): TableExpression<T, ExpressionF<{}>>;
+    function Statement(alias?: string): TableExpression<T, ExpressionF<{}>> | P {
+        if (alias == null) {
+            return AsTableExpression;
+        } else {
+            return columns(alias);
+        }
+    }
+    return (function<U>(a: U): U & {type: T, parameters: P} {return <any> a;})(Statement);
+}
+
 //https://stackoverflow.com/questions/53966509/typescript-type-safe-omit-function
 function omit<T extends object, K extends [...(keyof T)[]]>(obj: T, ...keys: K): {
     [K2 in Exclude<keyof T, K[number]>]: T[K2]
 } {
     let ret = {} as {
-        [K in keyof typeof obj]: (typeof obj)[K]
+        [K in keyof T]: T[K]
     };
-    let key: keyof typeof obj;
+    let key: keyof T;
     for (key in obj) {
         if (!(keys.includes(key))) {
             ret[key] = obj[key];
