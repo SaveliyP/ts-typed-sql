@@ -2,7 +2,7 @@ import { Model, generateMigration } from "./model";
 import { DBIncrements, DBEnum, DBString, DBBinary, DBInteger, DBTimestamp } from "./columns";
 import { op, avg, and } from "./expressions";
 import { database } from "./database";
-import { $b, $s, $ } from "./utils";
+import { literals, $boolean, $text } from "./utils";
 
 const Picture = new Model("picture", {
     id: new DBIncrements(),
@@ -63,7 +63,7 @@ database({
     console.log(r);
 });*/
 
-db.deleteFrom(Picture).where(t => op(t.id, '=', 2)).returning(t => ({
+db.deleteFrom(Picture).where(t => op(t.id, '=', literals.integer("2"))).returning(t => ({
     w: t.width,
     h: t.height
 })).execute({}).then(x => {
@@ -71,19 +71,19 @@ db.deleteFrom(Picture).where(t => op(t.id, '=', 2)).returning(t => ({
 });
 
 db.into(Picture).insert({
-    id: 1,
-    height: 15,
-    time: new Date(69420),
-    width: 420,
-    uploader: 1
+    id: literals.integer("1"),
+    height: literals.integer("15"),
+    time: literals.timestamp("2000=01-01T12:00:00.000000Z"),
+    width: literals.integer("420"),
+    uploader: literals.integer("1")
 }).execute({}).then(x => {
     
 });
 
 db.with({
     a: db.select(x => ({
-        a: 2,
-        b: 4
+        a: literals.integer("2"),
+        b: literals.integer("4")
     }))
 }).update(Picture).using({
     test: User,
@@ -98,31 +98,31 @@ db.with({
 db.with({
     //pp: Picture,
     test: db.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email})).select((t, g) => ({id: g.a, email: g.b})),
-    test2: db.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email, c: $b("a")})).select((t, g) => ({id: g.a, email: g.b, test: $s("b")}))
+    test2: db.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email, c: $boolean("a")})).select((t, g) => ({id: g.a, email: g.b, test: $text("b")}))
 })
 .from({
     u: User,
     p: Picture,
     unused: "test",
     unused2: "test2",
-    test2: db.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email, c: $b("a")})).select((t, g) => ({id: g.a, email: g.b, test: $s("b")}))
+    test2: db.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email, c: $boolean("a")})).select((t, g) => ({id: g.a, email: g.b, test: $text("b")}))
 })
-.where(({p}) => and(op(p.height, '>=', 200), op(p.width, '>=', 200), $b("always_true")))
+.where(({p}) => and(op(p.height, '>=', literals.integer("200")), op(p.width, '>=', literals.integer("200")), $boolean("always_true")))
 .where(({p, u}) => op(p.id, '=', u.profile_picture))
 .where(({unused}) => op(unused.id, '=', unused.id))
-.where(() => op($s("string_parameter"), '=', ""))
+.where(() => op($text("string_parameter"), '=', literals.text("")))
 .groupBy(t => ({
     width: t.p.width,
-    asdf: $s("string_parameter2")
+    asdf: $text("string_parameter2")
 }))
 .having((tables, group) => {
-    return and(op(avg(tables.p.height), '>=', 200), $b("bool_param"));
+    return and(op(avg(tables.p.height), '>=', literals.integer("200")), $boolean("bool_param"));
 })
 .select(({p, u}, group) => {
     return {
         picture_width: group.width,
         average_picture_height: avg(p.height),
-        test: $s("string_parameter_3")
+        test: $text("string_parameter_3")
     };
 }).execute({
     a: true,

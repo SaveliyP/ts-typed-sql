@@ -1,6 +1,7 @@
-import { Expression, TableExpression, TableProvider, TableProviders, TableType, TableTypes, SQLType, ExpressionF } from '../query_types';
-import { identifier, replace, expres, mapRawExpression, ToExpression, createTableProvider, createTableExpression } from '../utils';
+import { Expression, TableExpression, TableProvider, TableProviders, TableType, TableTypes, ExpressionF } from '../query_types';
+import { identifier, replace, createTableProvider, createTableExpression, expressionWithParentheses } from '../utils';
 import { Model } from '../model';
+import { SQLType } from '../columns';
 
 import * as pg from 'pg';
 
@@ -8,13 +9,13 @@ interface CompleteDeleteQuery<CTE extends TableTypes, P extends ExpressionF<neve
     recursiveWith: boolean;
     cte: TableProviders<CTE, P>;
     from: Model<D>;
-    conditions: Expression<boolean, boolean, P>[];
-    returning: {[key in keyof R]: Expression<R[key], boolean, P> | R[key]};
+    conditions: Expression<"boolean", boolean, P>[];
+    returning: {[key in keyof R]: Expression<R[key], boolean, P>};
 }
 
 function toQuery
 <CTE extends TableTypes, P extends ExpressionF<never>, D extends TableType, R extends TableType>
-(deleteStmt: CompleteDeleteQuery<CTE, P, D, R>, parameters: never, names: {[key: string]: number}, args: SQLType[]): string {
+(deleteStmt: CompleteDeleteQuery<CTE, P, D, R>, parameters: never, names: {[key: string]: number}, args: any[]): string {
     function getWith() {
         const creation: string[] = [];
         for (const x in deleteStmt.cte) {
@@ -29,12 +30,13 @@ function toQuery
     }
 
     function getWhere() {
-        return deleteStmt.conditions.length > 0 ? "WHERE " + deleteStmt.conditions.map(mapRawExpression(2, parameters, names, args)).join(" AND ") : "";
+        const mapper = expressionWithParentheses(2, names, args, parameters);
+        return deleteStmt.conditions.length > 0 ? "WHERE " + deleteStmt.conditions.map(mapper).join(" AND ") : "";
     }
 
     function getReturning() {
         const returning: string[] = [];
-        const mapper = mapRawExpression(0, parameters, names, args);
+        const mapper = expressionWithParentheses(0, names, args, parameters);
         for (const key in deleteStmt.returning) {
             returning.push(mapper(deleteStmt.returning[key]) + " AS " + identifier(key));
         }
@@ -51,7 +53,7 @@ function toQuery
 
 type DeleteStatementClass<CTE extends TableTypes, P extends ExpressionF<never>, D extends TableType, R extends TableType> = TableProvider<R, P>;
 const DeleteStatementClass = function<CTE extends TableTypes, P extends ExpressionF<never>, D extends TableType, R extends TableType>(this: DeleteStatementClass<CTE, P, D, R>, query: CompleteDeleteQuery<CTE, P, D, R>): DeleteStatementClass<CTE, P, D, R> {
-    const AsTableExpression: P = function AsTableExpression(names: {[key: string]: number}, args: SQLType[]) {
+    const AsTableExpression: P = function AsTableExpression(names: {[key: string]: number}, args: unknown[]) {
         return (parameters: never) => toQuery(query, parameters, names, args);
     } as unknown as P; //TODO: type-cast
 
@@ -74,7 +76,7 @@ class BaseDeleteStatement<CTE extends TableTypes, P extends ExpressionF<never>, 
     }
 
     async execute(parameters: {[key in keyof CalculateParameter<P>]: CalculateParameter<P>[key]}): Promise<R[]> {
-        const args: SQLType[] = [];
+        const args: unknown[] = [];
         const sql = this()({}, args)(<never> parameters); //TODO: type-cast
         console.log("Executing " + sql);
         console.log(args);
@@ -85,13 +87,13 @@ class BaseDeleteStatement<CTE extends TableTypes, P extends ExpressionF<never>, 
 }
 
 export class DeleteStatement<CTE extends TableTypes, P extends ExpressionF<never>, D extends TableType> extends BaseDeleteStatement<CTE, P, D, {}> {
-    returning<R extends {[key: string]: Expression<SQLType, boolean, ExpressionF<never>> | SQLType}>(lambda: (t: TableExpression<D, ExpressionF<{}>>) => R): BaseDeleteStatement<CTE, P | ToExpression<R[keyof R]>['execute'], D, {[key in keyof R]: ToExpression<R[key]>['return_type']}> {
+    returning<R extends {[key: string]: Expression<SQLType, boolean, ExpressionF<never>>}>(lambda: (t: TableExpression<D, ExpressionF<{}>>) => R): BaseDeleteStatement<CTE, P | R[keyof R]['execute'], D, {[key in keyof R]: R[key]['return_type']}> {
         const returning = lambda(this.from);
-        const res: CompleteDeleteQuery<CTE, P | ToExpression<R[keyof R]>['execute'], D, {[key in keyof R]: ToExpression<R[key]>['return_type']}> = replace(this.query, "returning", returning);
+        const res: CompleteDeleteQuery<CTE, P | R[keyof R]['execute'], D, {[key in keyof R]: R[key]['return_type']}> = replace(this.query, "returning", returning);
         return new BaseDeleteStatement(this.db, res);
     }
 
-    where<Q extends ExpressionF<never>>(lambda: (t: TableExpression<D, ExpressionF<{}>>) => Expression<boolean, boolean, P | Q>): DeleteStatement<CTE, P | Q, D> {
+    where<Q extends ExpressionF<never>>(lambda: (t: TableExpression<D, ExpressionF<{}>>) => Expression<"boolean", boolean, P | Q>): DeleteStatement<CTE, P | Q, D> {
         return new DeleteStatement(this.db, replace(this.query, "conditions", [...this.query.conditions, lambda(this.from)]));
     }
 }

@@ -1,7 +1,8 @@
-import { Expression, TableExpression, TableProvider, TableProviders, TableType, TableTypes, SQLType, ExpressionF, TableExpressions } from '../query_types';
-import { identifier, replace, expres, mapRawExpression, ToExpression, createTableProvider, createTableExpression, withParentheses, rawOrExpression } from '../utils';
+import { Expression, TableExpression, TableProvider, TableProviders, TableType, TableTypes, ExpressionF, TableExpressions } from '../query_types';
+import { identifier, replace, createTableProvider, createTableExpression, withParentheses, expressionWithParentheses } from '../utils';
 import { Model } from '../model';
 import { SelectStatementClass, FromClause, FromClauseType, transformFrom, FromClauseProviders } from './select';
+import { SQLType } from '../columns';
 
 import * as pg from 'pg';
 
@@ -10,13 +11,13 @@ interface CompleteUpdateQuery<CTE extends TableTypes, P extends ExpressionF<neve
     cte: TableProviders<CTE, P>;
     into: Model<U>;
     using: T;
-    set: {[key in keyof V]: V[key] | Expression<V[key], boolean, P>};
-    returning: {[key in keyof R]: Expression<R[key], boolean, P> | R[key]};
+    set: {[key in keyof V]: Expression<V[key], boolean, P>};
+    returning: {[key in keyof R]: Expression<R[key], boolean, P>};
 }
 
 function toQuery
 <CTE extends TableTypes, P extends ExpressionF<never>, U extends TableType, T extends FromClause<CTE, P>, V extends TableType, R extends TableType>
-(updateStmt: CompleteUpdateQuery<CTE, P, U, T, V, R>, parameters: never, names: {[key: string]: number}, args: SQLType[]): string {
+(updateStmt: CompleteUpdateQuery<CTE, P, U, T, V, R>, parameters: never, names: {[key: string]: number}, args: unknown[]): string {
     function getWith() {
         const creation: string[] = [];
         for (const x in updateStmt.cte) {
@@ -52,15 +53,15 @@ function toQuery
     }
 
     function getValues() {
-        const mapper = mapRawExpression(4, parameters, names, args);
+        const mapper = expressionWithParentheses(4, names, args, parameters);
         return "SET " + Object.keys(updateStmt.set).map(key => {
-            return identifier(key) + "=" + mapper(rawOrExpression(updateStmt.set[key]));
+            return identifier(key) + "=" + mapper(updateStmt.set[key]);
         }).join(",");
     }
 
     function getReturning() {
         const returning: string[] = [];
-        const mapper = mapRawExpression(0, parameters, names, args);
+        const mapper = expressionWithParentheses(0, names, args, parameters);
         for (const key in updateStmt.returning) {
             returning.push(mapper(updateStmt.returning[key]) + " AS " + identifier(key));
         }
@@ -78,7 +79,7 @@ function toQuery
 
 type UpdateStatementClass<CTE extends TableTypes, P extends ExpressionF<never>, U extends TableType, T extends FromClause<CTE, P>, V extends TableType, R extends TableType> = TableProvider<R, P>;
 const UpdateStatementClass = function<CTE extends TableTypes, P extends ExpressionF<never>, U extends TableType, T extends FromClause<CTE, P>, V extends TableType, R extends TableType>(this: UpdateStatementClass<CTE, P, U, T, V, R>, query: CompleteUpdateQuery<CTE, P, U, T, V, R>): UpdateStatementClass<CTE, P, U, T, V, R> {
-    const AsTableExpression: P = function AsTableExpression(names: {[key: string]: number}, args: SQLType[]) {
+    const AsTableExpression: P = function AsTableExpression(names: {[key: string]: number}, args: unknown[]) {
         return (parameters: never) => toQuery(query, parameters, names, args);
     } as unknown as P; //TODO: type-cast
 
@@ -101,7 +102,7 @@ class BaseUpdateStatement<CTE extends TableTypes, P extends ExpressionF<never>, 
     }
 
     async execute(parameters: {[key in keyof CalculateParameter<P>]: CalculateParameter<P>[key]}): Promise<R[]> {
-        const args: SQLType[] = [];
+        const args: unknown[] = [];
         const sql = this()({}, args)(<never> parameters); //TODO: type-cast
         console.log("Executing " + sql);
         console.log(args);
@@ -112,17 +113,17 @@ class BaseUpdateStatement<CTE extends TableTypes, P extends ExpressionF<never>, 
 }
 
 export class UpdateSetStatement<CTE extends TableTypes, P extends ExpressionF<never>, U extends TableType, T extends FromClause<CTE, P>, V extends TableType> extends BaseUpdateStatement<CTE, P, U, T, V, {}> {
-    returning<R extends {[key: string]: Expression<SQLType, boolean, ExpressionF<never>> | SQLType}>(lambda: (t: TableExpression<U, ExpressionF<{}>>) => R): BaseUpdateStatement<CTE, P | ToExpression<R[keyof R]>['execute'], U, T, V, {[key in keyof R]: ToExpression<R[key]>['return_type']}> {
+    returning<R extends {[key: string]: Expression<SQLType, boolean, ExpressionF<never>>}>(lambda: (t: TableExpression<U, ExpressionF<{}>>) => R): BaseUpdateStatement<CTE, P | R[keyof R]['execute'], U, T, V, {[key in keyof R]: R[key]['return_type']}> {
         const returning = lambda(this.into);
-        const res: CompleteUpdateQuery<CTE, P | ToExpression<R[keyof R]>['execute'], U, T, V, {[key in keyof R]: ToExpression<R[key]>['return_type']}> = replace(this.query, "returning", returning);
+        const res: CompleteUpdateQuery<CTE, P | R[keyof R]['execute'], U, T, V, {[key in keyof R]: R[key]['return_type']}> = replace(this.query, "returning", returning);
         return new BaseUpdateStatement(this.db, res);
     }
 }
 
 type Req<T> = {[key in keyof T]-?: NonNullable<T[key]>};
-type OptV<T extends TableType> = {[key in keyof T]?: T[key] | Expression<T[key], boolean, ExpressionF<never>>};
-type OptVT<T extends OptV<TableType>> = {[key in keyof Req<T>]: ToExpression<Req<T>[key]>['return_type']};
-type OptVP<T extends OptV<TableType>> = ToExpression<Req<T>[keyof Req<T>]>['execute'];
+type OptV<T extends TableType> = {[key in keyof T]?: Expression<T[key], boolean, ExpressionF<never>>};
+type OptVT<T extends OptV<TableType>> = {[key in keyof Req<T>]: Req<T>[key]['return_type']};
+type OptVP<T extends OptV<TableType>> = Req<T>[keyof Req<T>]['execute'];
 export class UpdateFromStatement<CTE extends TableTypes, P extends ExpressionF<never>, U extends TableType, T extends FromClause<CTE, P>> {
     protected db: pg.Client;
     protected query: CompleteUpdateQuery<CTE, P, U, T, {}, {}>;

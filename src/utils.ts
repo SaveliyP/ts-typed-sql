@@ -1,83 +1,51 @@
-import { Expression, SQLType, JSONType, ExpressionF, TableType, TableExpression } from "./query_types";
+import { Expression, ExpressionF, TableType, TableExpression } from "./query_types";
+import { SQLType } from "./columns";
+
+const TypeMapping: {[key in SQLType]: string} = {
+    biginteger: "BIGINT",
+    binary: "BYTEA",
+    boolean: "BOOLEAN",
+    date: "DATE",
+    datetime: "TIMESTAMP",
+    enum: "VARCHAR",
+    float: "FLOAT",
+    integer: "INT",
+    json: "JSON",
+    text: "TEXT",
+    time: "TIME",
+    timestamp: "TIMESTAMP",
+    uuid: "UUID"
+};
 
 export function identifier(id: string): string {
     return "\"" + id.replace(/"/g, "\"\"") + "\"";
 }
 
-export function addPhantomProperties<T extends SQLType, U extends boolean, V>(arg: V): V & {grouped: U, return_type: T} {
-    return arg as V & {grouped: U, return_type: T};
+export function addPhantomProperties<U extends boolean, V>(arg: V): V & {grouped: U} {
+    return arg as V & {grouped: U};
 }
 
-export function expression<T extends SQLType, U extends boolean, E extends Expression<SQLType, boolean, ExpressionF<never>>[]>(expr: E, precedence: number): Expression<T, U, E[number]['execute']> {
-    var exec: E[number]['execute'] = function(names, args) {
-        const exprM = expr.map(x => ({precedence: x.precedence, execute: x.execute(names, args)}));
-
-        return (parameters) => exprM.map(x => {
-            if (precedence > x.precedence) {
-                return "(" + x.execute(parameters) + ")";
-            } else {
-                return x.execute(parameters);
-            }
-        }).join("");
-    }
-    return addPhantomProperties({
-        execute: exec,
-        precedence: precedence
-    });
-}
-
-export function expres<T extends SQLType, U extends boolean, E extends ExpressionF<never>>(expr: E, precedence: number): Expression<T, U, E> {
+export function expres<T extends SQLType, U extends boolean, E extends ExpressionF<never>>(expr: E, type: T, precedence: number): Expression<T, U, E> {
     return addPhantomProperties({
         execute: expr,
+        return_type: type,
         precedence: precedence
     });
 }
 
-export function mapRawExpression(precedence: number, parameters: never, names: {[key: string]: number}, args: SQLType[]): ((x: SQLType | Expression<SQLType, boolean, ExpressionF<never>>) => string) {
-    return x => {
-        const y = rawOrExpression(x);
-        return withParentheses(y.execute(names, args)(parameters), precedence > y.precedence);
-    };
+export function expressionWithParentheses(precedence: number, names: {[key: string]: number}, args: unknown[], parameters: never): ((x: Expression<SQLType, boolean, ExpressionF<never>>) => string) {
+    return x => withParentheses(x.execute(names, args)(parameters), precedence > x.precedence);
 }
 
-function r(value: SQLType): Expression<SQLType, true, ExpressionF<{}>> {
-    var exec = function(names: {[key: string]: number}, args: SQLType[]) {
-        args.push(value);
-        const pId = args.length;
-        return (parameters: {}) => "$" + pId;
-    }
+export const $text = <K extends string>(id: K) => $(id, "text");
+export const $float = <K extends string>(id: K) => $(id, "float");
+export const $int = <K extends string>(id: K) => $(id, "integer");
+export const $bigint = <K extends string>(id: K) => $(id, "biginteger");
+export const $boolean = <K extends string>(id: K) => $(id, "boolean");
+export const $date = <K extends string>(id: K) => $(id, "date");
 
-    return addPhantomProperties({
-        execute: exec,
-        precedence: 99
-    });
-}
-
-export function raw(value: string): Expression<string, true, ExpressionF<{}>>;
-export function raw(value: number): Expression<number, true, ExpressionF<{}>>;
-export function raw(value: boolean): Expression<boolean, true, ExpressionF<{}>>;
-export function raw(value: boolean[]): Expression<boolean[], true, ExpressionF<{}>>; //TODO: this needs to be done differently
-export function raw(value: Buffer): Expression<Buffer, true, ExpressionF<{}>>;
-export function raw(value: bigint): Expression<bigint, true, ExpressionF<{}>>;
-export function raw(value: Date): Expression<Date, true, ExpressionF<{}>>;
-export function raw(value: JSONType): Expression<JSONType, true, ExpressionF<{}>>;
-export function raw(value: SQLType): Expression<SQLType, true, ExpressionF<{}>> {
-    return r(value);
-}
-
-export function $s<K extends string>(id: K): Expression<string, true, ExpressionF<{[key in K]: string}>> {
-    return $<string, K>(id);
-}
-export function $n<K extends string>(id: K): Expression<number, true, ExpressionF<{[key in K]: number}>> {
-    return $<number, K>(id);
-}
-export function $b<K extends string>(id: K): Expression<boolean, true, ExpressionF<{[key in K]: boolean}>> {
-    return $<boolean, K>(id);
-}
-export const $d = <K extends string>(id: K) => $<Date, K>(id);
-
-export function $<T extends SQLType, K extends string>(id: K): Expression<T, true, ExpressionF<{[key in K]: T}>> {
-    var exec = function(names: {[key: string]: number}, args: SQLType[]) {
+export function $<T extends SQLType, K extends string>(id: K, type: T): Expression<T, true, ExpressionF<{[key in K]: T}>> {
+    var exec = function(names: {[key: string]: number}, args: unknown[]) {
         return function(parameters: {[key in K]: T}) {
             if (names[id] == null) {
                 args.push(parameters[id]);
@@ -89,18 +57,40 @@ export function $<T extends SQLType, K extends string>(id: K): Expression<T, tru
     }
     return addPhantomProperties({
         execute: exec,
+        return_type: type,
         precedence: 99
     });
 }
 
-export type ToExpression<T extends SQLType | Expression<SQLType, boolean, ExpressionF<never>>> = T extends SQLType ? Expression<T, true, ExpressionF<{}>> : T;
-export function rawOrExpression<T extends SQLType | Expression<SQLType, boolean, ExpressionF<never>>>(arg: T): ToExpression<T>;
-export function rawOrExpression(arg: SQLType | Expression<SQLType, boolean, ExpressionF<never>>): Expression<SQLType, boolean, ExpressionF<never>> {
-    if (typeof arg === 'object' && 'precedence' in arg) {
-        return arg;
-    } else {
-        return r(arg);
+export const literals: {[key in SQLType]: (value: string) => Expression<key, true, ExpressionF<{}>>} = {
+    biginteger: value => raw(value, "biginteger"),
+    binary: value => raw(value, "binary"),
+    boolean: value => raw(value, "boolean"),
+    date: value => raw(value, "date"),
+    datetime: value => raw(value, "datetime"),
+    enum: value => raw(value, "enum"),
+    float: value => raw(value, "float"),
+    integer: value => raw(value, "integer"),
+    json: value => raw(value, "json"),
+    text: value => raw(value, "text"),
+    time: value => raw(value, "time"),
+    timestamp: value => raw(value, "timestamp"),
+    uuid: value => raw(value, "uuid"),
+};
+
+export function raw<T extends SQLType>(value: string, type: T): Expression<T, true, ExpressionF<{}>> {
+    var exec = function(names: {[key: string]: number}, args: unknown[]) {
+        const id = args.length;
+        args.push(value);
+        return function(parameters: {}) {
+            return TypeMapping[type] + " $" + id;
+        }
     }
+    return addPhantomProperties({
+        execute: exec,
+        return_type: type,
+        precedence: 99
+    });
 }
 
 export function withParentheses(a: string, parentheses: boolean): string {
@@ -111,11 +101,11 @@ export function withParentheses(a: string, parentheses: boolean): string {
     }
 }
 
-export function createTableExpression<T extends TableType>(columns: {[key in keyof T]: T[key] | Expression<T[key], boolean, ExpressionF<never>>}): (alias: string) => TableExpression<T, ExpressionF<{}>> {
+export function createTableExpression<T extends TableType>(columns: {[key in keyof T]: Expression<T[key], boolean, ExpressionF<never>>}): (alias: string) => TableExpression<T, ExpressionF<{}>> {
     return function ColumnExpressions(alias: string): TableExpression<T, ExpressionF<{}>> {
         var expr: TableExpression<T, ExpressionF<{}>> = <any> {}; //TODO: <any>
         for (let key in columns) {
-            expr[key] = expres(() => () => identifier(alias) + "." + identifier(key), 99);
+            expr[key] = expres(() => () => identifier(alias) + "." + identifier(key), columns[key].return_type, 99);
         }
         return expr;
     }

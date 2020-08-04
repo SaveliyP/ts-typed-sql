@@ -1,7 +1,7 @@
 # ts-typed-sql
 A fully typed SQL builder for TypeScript.
 
-Eventually it should support all possible SQL statements while retaining type information. Right now it only supports defining models, basic SELECT statements with CTEs, some operators and the avg() function. Adding more operators and functions is just a matter of grinding through the SQL documentation.
+Eventually it should support all possible SQL statements while retaining type information. Right now it supports defining models, SELECT, INSERT, UPDATE and DELETE statements with CTEs, some operators and the avg() function. Adding more operators and functions is just a matter of grinding through the SQL documentation. Current syntax may be slightly awkward, but it is preliminary.
 
 Currently I'm targetting PostgreSQL, because it has better documentation, but eventually it will support other SQL dialects too.
 
@@ -167,13 +167,22 @@ Generated (but did not execute) the query: TypeError: x.average_picture_height.t
 
 ### TODO:
 
+ - Finish type system
+   - Allow custom types or not?
+     - Custom types would allow user to define string | Buffer -> type and type -> string | Buffer
+     - Would require another function X -> X is type
+   - Must remove and replace the requirement for literals.integer("123") with just 123
+     - Using this library should be simpler than just manually writing the SQL
+     - Potential problem: ambiguous types (e.g. "float" and "int" are both number in JS, but one must be selected)
+ - Refactor
+   - Clean up all statements to use common classes where possible
+   - Move certain types and functions into the files where they make more sense
+ - Error messages are very complex due to complex types.
  - Subqueries need to have access to base query tables
    - SELECT.where() should be (from, groups, with) => expr.
    - SELECT.having() should be (from, groups, with) => expr.
    - DELETE.where() should be (from, groups, with) => expr.
    - UPDATE.set() should be (update, using, with) => expr.
- - Register more types for pg-types
-   - Figure out type system
  - Add more operators and functions
  - WITH should prefix table names with __ to prevent collisions
  - Right now, only implicit inner joins work with FROM clause. Need to add explicit joins.

@@ -1,5 +1,12 @@
-import { SQLType, JSONType } from './query_types';
 import { TypeChecker, dict, optional, bool, str, intersection, num, array, union } from 'type-builder';
+
+export interface Day {
+    year: number;
+    month: number;
+    day: number;
+}
+
+export type SQLType = "integer" | "biginteger" | "text" | "float" | "boolean" | "date" | "datetime" | "time" | "timestamp"| "binary" | "enum" | "json" | "uuid";
 
 function ColumnType<T extends string, U extends {}>(x: {SerializedType: TypeChecker<U>}, y: T) {
     return intersection([
@@ -14,10 +21,10 @@ export abstract class Column<T extends SQLType> {
         nullable: optional(bool),
         defaultTo: optional(str)
     });
+    abstract type: T;
 
     protected isNullable?: boolean;
     protected shouldDefaultTo?: string;
-    type: T = <any> null;
 
     nullable(): void {
         this.isNullable = true;
@@ -130,9 +137,13 @@ abstract class TimeColumn<T extends SQLType> extends Column<T> {
     }
 }
 
-export class DBIncrements extends Column<number> {
-    static type: "increments" = "increments";
-    static SerializedType = ColumnType(Column, DBIncrements.type);
+export class DBIncrements extends Column<"integer"> {
+    static SerializedType = ColumnType(Column, "increments");
+
+    type: "integer" = "integer";
+
+    fromJS = (data: number) => data.toString();
+    toJS = Number.parseInt;
     
     getSQLType() {
         return "SERIAL";
@@ -140,7 +151,7 @@ export class DBIncrements extends Column<number> {
 
     serialize(): typeof DBIncrements.SerializedType.type {
         return {
-            type: DBIncrements.type,
+            type: "increments",
             ...super.serialize()
         };
     }
@@ -156,9 +167,13 @@ export class DBIncrements extends Column<number> {
     }
 }
 
-export class DBInteger extends LengthColumn<number> {
-    static type: "integer" = "integer";
-    static SerializedType = ColumnType(LengthColumn, DBInteger.type);
+export class DBInteger extends LengthColumn<"integer"> {
+    static SerializedType = ColumnType(LengthColumn, "integer");
+    
+    type: "integer" = "integer";
+
+    fromJS = (data: number) => data.toString();
+    toJS = Number.parseInt;
 
     getSQLType() {
         return "INT" + this.getLengthType();
@@ -166,7 +181,7 @@ export class DBInteger extends LengthColumn<number> {
 
     serialize(): typeof DBInteger.SerializedType.type {
         return {
-            type: DBInteger.type,
+            type: "integer",
             ...super.serialize()
         };
     }
@@ -182,8 +197,13 @@ export class DBInteger extends LengthColumn<number> {
     }
 }
 
-export class DBBigIncrements extends Column<bigint> {
+export class DBBigIncrements extends Column<"biginteger"> {
     static SerializedType = ColumnType(Column, "bigincrements");
+
+    type: "biginteger" = "biginteger";
+
+    fromJS = (data: bigint) => data.toString();
+    toJS = BigInt;
 
     getSQLType() {
         return "BIGSERIAL";
@@ -207,8 +227,13 @@ export class DBBigIncrements extends Column<bigint> {
     }
 }
 
-export class DBBigInteger extends LengthColumn<bigint> {
+export class DBBigInteger extends LengthColumn<"biginteger"> {
     static SerializedType = ColumnType(LengthColumn, "biginteger");
+
+    type: "biginteger" = "biginteger";
+
+    fromJS = (data: bigint) => data.toString();
+    toJS = BigInt;
 
     getSQLType() {
         return "BIGINT" + this.getLengthType();
@@ -232,13 +257,18 @@ export class DBBigInteger extends LengthColumn<bigint> {
     }
 }
 
-export class DBText extends Column<string> {
+export class DBText extends Column<"text"> {
     static SerializedType = intersection([
         dict({
             type: "text",
             textType: optional(union(["text", "mediumtext", "longtext"]))
         }), Column.SerializedType
     ]);
+
+    type: "text" = "text";
+
+    fromJS = (x: string) => x;
+    toJS = (x: string) => x;
 
     protected textType?: "text" | "mediumtext" | "longtext";
 
@@ -275,8 +305,13 @@ export class DBText extends Column<string> {
     }
 }
 
-export class DBString extends LengthColumn<string> {
+export class DBString extends LengthColumn<"text"> {
     static SerializedType = ColumnType(LengthColumn, "string");
+
+    type: "text" = "text";
+
+    fromJS = (data: string) => data;
+    toJS = (data: string) => data;
 
     getSQLType() {
         return "VARCHAR" + this.getLengthType();
@@ -300,7 +335,7 @@ export class DBString extends LengthColumn<string> {
     }
 }
 
-export class DBFloat extends Column<number> {
+export class DBFloat extends Column<"float"> {
     static SerializedType = intersection([
         dict({
             type: "float",
@@ -308,6 +343,11 @@ export class DBFloat extends Column<number> {
             //scale: optional(num)
         }), Column.SerializedType
     ]);
+
+    type: "float" = "float";
+
+    fromJS = (data: number) => data.toString();
+    toJS = Number;
 
     protected precision?: number;
     //protected scale?: number;
@@ -342,8 +382,13 @@ export class DBFloat extends Column<number> {
     }
 }
 
-export class DBBoolean extends Column<boolean> {
+export class DBBoolean extends Column<"boolean"> {
     static SerializedType = ColumnType(Column, "boolean");
+
+    type: "boolean" = "boolean";
+
+    fromJS = (data: boolean) => data ? "true" : "false";
+    toJS = Boolean;
 
     getSQLType() {
         return "BOOLEAN";
@@ -367,8 +412,31 @@ export class DBBoolean extends Column<boolean> {
     }
 }
 
-export class DBDate extends Column<Date> {
+export function Day(year: number, month: number, day: number): Day {
+    return {year, month, day};
+}
+
+export class DBDate extends Column<"date"> {
     static SerializedType = ColumnType(Column, "date");
+
+    type: "date" = "date";
+
+    fromJS = (data: Day) => data.year + "-" + data.month + "-" + data.day;
+    toJS = (data: string) => {
+        var res = data.split("-");
+        if (res.length != 3) {
+            throw Error("Invalid date format: " + data);
+        }
+        var res2 = res.map(Number);
+        if (res2.some(Number.isNaN)) {
+            throw Error("Invalid date format: " + data);
+        }
+        return {
+            year: res2[0],
+            month: res2[1],
+            day: res2[2]
+        };
+    };
 
     getSQLType() {
         return "DATE";
@@ -392,8 +460,10 @@ export class DBDate extends Column<Date> {
     }
 }
 
-export class DBDateTime extends TimeColumn<Date> {
+export class DBDateTime extends TimeColumn<"datetime"> {
     static SerializedType = ColumnType(TimeColumn, "datetime");
+
+    type: "datetime" = "datetime";
 
     getSQLType() {
         return "TIMESTAMP";
@@ -417,8 +487,10 @@ export class DBDateTime extends TimeColumn<Date> {
     }
 }
 
-export class DBTime extends Column<Date> {
+export class DBTime extends Column<"time"> {
     static SerializedType = ColumnType(Column, "time");
+    
+    type: "time" = "time";
 
     //precision?: number;
 
@@ -444,8 +516,10 @@ export class DBTime extends Column<Date> {
     }
 }
 
-export class DBTimestamp extends TimeColumn<Date> {
+export class DBTimestamp extends TimeColumn<"timestamp"> {
     static SerializedType = ColumnType(TimeColumn, "timestamp");
+
+    type: "timestamp" = "timestamp";
 
     getSQLType() {
         return "TIMESTAMP";
@@ -469,8 +543,10 @@ export class DBTimestamp extends TimeColumn<Date> {
     }
 }
 
-export class DBBinary extends LengthColumn<Buffer> {
+export class DBBinary extends LengthColumn<"binary"> {
     static SerializedType = ColumnType(LengthColumn, "binary");
+
+    type: "binary" = "binary";
 
     getSQLType() {
         return "BYTEA"/* + this.getLengthType()*/; //TODO: 
@@ -494,7 +570,7 @@ export class DBBinary extends LengthColumn<Buffer> {
     }
 }
 
-export class DBEnum<T extends string> extends Column<T> {
+export class DBEnum<T extends string> extends Column<"enum"> {
     static SerializedType = intersection([
         dict({
             type: "enum",
@@ -507,6 +583,8 @@ export class DBEnum<T extends string> extends Column<T> {
             }))
         }), Column.SerializedType
     ]);
+
+    type: "enum" = "enum";
 
     protected values: T[];
     protected postgres?: {
@@ -552,8 +630,10 @@ export class DBEnum<T extends string> extends Column<T> {
     }
 }
 
-export class DBJson extends Column<JSONType> {
+export class DBJson extends Column<"json"> {
     static SerializedType = ColumnType(Column, "json");
+
+    type: "json" = "json";
 
     getSQLType() {
         return "JSON";
@@ -577,8 +657,10 @@ export class DBJson extends Column<JSONType> {
     }
 }
 
-export class DBJsonB extends Column<JSONType> {
+export class DBJsonB extends Column<"json"> {
     static SerializedType = ColumnType(Column, "jsonb");
+
+    type: "json" = "json";
 
     getSQLType() {
         return "JSONB";
@@ -602,8 +684,10 @@ export class DBJsonB extends Column<JSONType> {
     }
 }
 
-export class DBUUID extends Column<Buffer> {
+export class DBUUID extends Column<"uuid"> {
     static SerializedType = ColumnType(Column, "uuid");
+
+    type: "uuid" = "uuid";
 
     getSQLType() {
         return "UUID";
@@ -627,38 +711,30 @@ export class DBUUID extends Column<Buffer> {
     }
 }
 
-const ColumnTypes: {[key: string]: (new (...args: any[]) => Column<SQLType>) & {
+const ColumnTypes = (function<T extends {[key: string]: (new (...args: any[]) => Column<SQLType>) & {
     SerializedType: TypeChecker<{type: string}>;
     deserialize(options: any): Column<SQLType> | null;
-}} = {};
-
-export function registerType<T extends Column<SQLType>, U extends string>(name: U, type: (new (...args: any[]) => T) & {
-    SerializedType: TypeChecker<{type: U}>;
-    deserialize(options: any): T | null;
-}) {
-    if (name in ColumnTypes) {
-        throw Error("Column type " + name + " already registered!");
-    }
-    ColumnTypes[name] = type;
-}
-
-registerType("increments", DBIncrements);
-registerType("integer", DBInteger);
-registerType("bigincrements", DBBigIncrements);
-registerType("biginteger", DBBigInteger);
-registerType("text", DBText);
-registerType("string", DBString);
-registerType("float", DBFloat);
-registerType("boolean", DBBoolean);
-registerType("date", DBDate);
-registerType("datetime", DBDateTime);
-registerType("time", DBTime);
-registerType("timestamp", DBTimestamp);
-registerType("binary", DBBinary);
-registerType("enum", DBEnum);
-registerType("json", DBJson);
-registerType("jsonb", DBJsonB);
-registerType("uuid", DBUUID);
+}}>(list: T) {
+    return list;
+})({
+    increments: DBIncrements,
+    integer: DBInteger,
+    bigincrements: DBBigIncrements,
+    biginteger: DBBigInteger,
+    text: DBText,
+    string: DBString,
+    float: DBFloat,
+    boolean: DBBoolean,
+    date: DBDate,
+    datetime: DBDateTime,
+    time: DBTime,
+    timestamp: DBTimestamp,
+    binary: DBBinary,
+    enum: DBEnum,
+    json: DBJson,
+    jsonb: DBJsonB,
+    uuid: DBUUID
+});
 
 export function deserializeColumn(data: any): Column<SQLType> | null {
     const target = Object.values(ColumnTypes).find(val => val.SerializedType(data));

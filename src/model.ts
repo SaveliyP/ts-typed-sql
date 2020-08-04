@@ -1,5 +1,5 @@
-import { TableExpression, TableProvider, SQLType, TableType, ExpressionF } from './query_types';
-import { Column, deserializeColumn } from './columns';
+import { TableExpression, TableProvider, TableType, ExpressionF } from './query_types';
+import { Column, deserializeColumn, SQLType } from './columns';
 import { identifier, expres } from './utils';
 import { dict, str, array, strDict } from 'type-builder';
 import { isDeepStrictEqual } from 'util';
@@ -48,7 +48,7 @@ const ModelClass = function<T extends TableType>(this: ModelClass<T>, name: stri
         } else {
             var expr: TableExpression<T, ExpressionF<{}>> = <any> {}; //TODO: <any>
             for (let key in res.columns) {
-                expr[key] = expres(() => () => identifier(alias) + "." + identifier(key), 99);
+                expr[key] = expres(() => () => identifier(alias) + "." + identifier(key), res.columns[key].column.type, 99);
             }
             return expr;
         }

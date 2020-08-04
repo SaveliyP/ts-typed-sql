@@ -1,5 +1,6 @@
 import * as pg from 'pg';
 import base from './queries/index';
+import { SQLType } from './columns';
 
 //TODO: register all possible types
 pg.types.setTypeParser(1700, str => {
