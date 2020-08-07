@@ -1,11 +1,5 @@
 import { TypeChecker, dict, optional, bool, str, intersection, num, array, union } from 'type-builder';
 
-export interface Day {
-    year: number;
-    month: number;
-    day: number;
-}
-
 export type SQLType = "integer" | "biginteger" | "text" | "float" | "boolean" | "date" | "datetime" | "time" | "timestamp"| "binary" | "enum" | "json" | "uuid";
 
 function ColumnType<T extends string, U extends {}>(x: {SerializedType: TypeChecker<U>}, y: T) {
@@ -141,9 +135,6 @@ export class DBIncrements extends Column<"integer"> {
     static SerializedType = ColumnType(Column, "increments");
 
     type: "integer" = "integer";
-
-    fromJS = (data: number) => data.toString();
-    toJS = Number.parseInt;
     
     getSQLType() {
         return "SERIAL";
@@ -172,9 +163,6 @@ export class DBInteger extends LengthColumn<"integer"> {
     
     type: "integer" = "integer";
 
-    fromJS = (data: number) => data.toString();
-    toJS = Number.parseInt;
-
     getSQLType() {
         return "INT" + this.getLengthType();
     }
@@ -202,9 +190,6 @@ export class DBBigIncrements extends Column<"biginteger"> {
 
     type: "biginteger" = "biginteger";
 
-    fromJS = (data: bigint) => data.toString();
-    toJS = BigInt;
-
     getSQLType() {
         return "BIGSERIAL";
     }
@@ -231,9 +216,6 @@ export class DBBigInteger extends LengthColumn<"biginteger"> {
     static SerializedType = ColumnType(LengthColumn, "biginteger");
 
     type: "biginteger" = "biginteger";
-
-    fromJS = (data: bigint) => data.toString();
-    toJS = BigInt;
 
     getSQLType() {
         return "BIGINT" + this.getLengthType();
@@ -266,9 +248,6 @@ export class DBText extends Column<"text"> {
     ]);
 
     type: "text" = "text";
-
-    fromJS = (x: string) => x;
-    toJS = (x: string) => x;
 
     protected textType?: "text" | "mediumtext" | "longtext";
 
@@ -310,9 +289,6 @@ export class DBString extends LengthColumn<"text"> {
 
     type: "text" = "text";
 
-    fromJS = (data: string) => data;
-    toJS = (data: string) => data;
-
     getSQLType() {
         return "VARCHAR" + this.getLengthType();
     }
@@ -345,9 +321,6 @@ export class DBFloat extends Column<"float"> {
     ]);
 
     type: "float" = "float";
-
-    fromJS = (data: number) => data.toString();
-    toJS = Number;
 
     protected precision?: number;
     //protected scale?: number;
@@ -387,9 +360,6 @@ export class DBBoolean extends Column<"boolean"> {
 
     type: "boolean" = "boolean";
 
-    fromJS = (data: boolean) => data ? "true" : "false";
-    toJS = Boolean;
-
     getSQLType() {
         return "BOOLEAN";
     }
@@ -412,31 +382,10 @@ export class DBBoolean extends Column<"boolean"> {
     }
 }
 
-export function Day(year: number, month: number, day: number): Day {
-    return {year, month, day};
-}
-
 export class DBDate extends Column<"date"> {
     static SerializedType = ColumnType(Column, "date");
 
     type: "date" = "date";
-
-    fromJS = (data: Day) => data.year + "-" + data.month + "-" + data.day;
-    toJS = (data: string) => {
-        var res = data.split("-");
-        if (res.length != 3) {
-            throw Error("Invalid date format: " + data);
-        }
-        var res2 = res.map(Number);
-        if (res2.some(Number.isNaN)) {
-            throw Error("Invalid date format: " + data);
-        }
-        return {
-            year: res2[0],
-            month: res2[1],
-            day: res2[2]
-        };
-    };
 
     getSQLType() {
         return "DATE";

@@ -1,17 +1,13 @@
 import * as pg from 'pg';
 import base from './queries/index';
 import { SQLType } from './columns';
+import { TypeParser } from './types';
 
-//TODO: register all possible types
-pg.types.setTypeParser(1700, str => {
-    return Number.parseFloat(str);
-});
-
-export async function database(options: string | pg.ClientConfig) {
+export async function database<T extends {[key in SQLType]: unknown}>(options: string | pg.ClientConfig, types: TypeParser<T>) {
     const db = new pg.Client(options);
-    const b = base(db);
+    const b = base(db, types);
 
-    //await db.connect();
+    await db.connect();
 
     return {
         with: b.withT,
@@ -25,5 +21,6 @@ export async function database(options: string | pg.ClientConfig) {
         into: b.into,
 
         update: b.update,
+        raw: (sql: string, params?: any[]) => db.query(sql, params),
     };
 }
