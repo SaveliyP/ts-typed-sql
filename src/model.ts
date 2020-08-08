@@ -69,7 +69,7 @@ type ArrayLength<T, N extends number> = T[] & {length: N};
 type KeyCreatorFunc<T extends TableType> = (...keys: Extract<keyof T, string>[]) => void;
 type ForeignKeyReference<V extends number> = {ref: <U extends TableType>(target: Model<U>, ...keys: ArrayLength<Extract<keyof U, string>, V>) => void};
 type ForeignCreatorFunc<T extends TableType> = <V extends number>(...keys: ArrayLength<Extract<keyof T, string>, V>) => ForeignKeyReference<V>;
-type KeyCreator<T extends TableType> = (t: {primary: KeyCreatorFunc<T>, unique: KeyCreatorFunc<T>, index: KeyCreatorFunc<T>, foreign: ForeignCreatorFunc<T>, self: Model<T>}) => void;
+type KeyCreator<T extends TableType> = (t: {primary: KeyCreatorFunc<T>, unique: KeyCreatorFunc<T>, index: KeyCreatorFunc<T>, foreign: ForeignCreatorFunc<T>}) => void;
 
 type ForeignKey = {
     target: string;
@@ -88,21 +88,16 @@ export class Model<T extends TableType> extends ModelClass<T> {
     protected uniqueKeys: string[][] = [];
     protected indices: string[][] = [];
     protected foreignKeys: ForeignKeyM[] = [];
-
-    //TODO: Move all migrations to operate outside of Model in migrations.ts
-    static fkMap(x: ForeignKeyM) {
-        return {
-            target: x.target.modelName,
-            from: x.from,
-            to: x.to
-        };
-    }
+    protected keys?: KeyCreator<T>;
 
     constructor(name: string, obj: TableDefinition<T>, keys?: KeyCreator<T>) {
         super(name, obj);
+        this.keys = keys;
+    }
 
-        if (keys != null) {
-            keys({
+    protected addKeys() {
+        if (this.keys != null) {
+            this.keys({
                 primary: (...keys) => {
                     if (this.primaryKey.length != 0) {
                         throw new Error("Primary key has already been set!");
@@ -116,15 +111,15 @@ export class Model<T extends TableType> extends ModelClass<T> {
                     return {
                         ref: (target, ...targetKeys) => {
                             this.foreignKeys.push({
-                                target: target,
+                                target: <any> target,
                                 from: selfKeys,
                                 to: targetKeys
                             });
                         }
                     }
-                },
-                self: this
+                }
             });
+            this.keys = undefined;
         }
     }
 
@@ -141,12 +136,13 @@ export class Model<T extends TableType> extends ModelClass<T> {
         }))
     });
 
-    serialize(): typeof Model.SerializedType.type {
-        var columns: (typeof Model.SerializedType)['type']['columns'] = <any> {};
+    serialize(): SerializedModel[] {
+        this.addKeys();
+        var columns: SerializedModel['columns'] = <any> {};
         for (var key in this.columns) {
             columns[key] = this.columns[key].column.serialize();
         }
-        return {
+        return [{
             name: this.modelName,
             columns: columns,
             primaryKey: this.primaryKey.map(x => x),
@@ -157,10 +153,10 @@ export class Model<T extends TableType> extends ModelClass<T> {
                 from: x.from.map(y => y),
                 to: x.to.map(y => y)
             }))
-        }
+        }];
     }
 
-    static deserialize(from: any): Model<TableType> {
+    /*static deserialize(from: any): Model<TableType> {
         if (!this.SerializedType(from)) {
             throw new Error("Invalid model! " + JSON.stringify(from, null, 4));
         }
@@ -188,10 +184,10 @@ export class Model<T extends TableType> extends ModelClass<T> {
         }));
 
         return ret;
-    }
+    }*/
 
-    diff(to: Model<TableType>): ModelDiff {
-        const last = new Set(Object.keys(this.columns));
+    static diff(from: SerializedModel, to: SerializedModel): ModelDiff {
+        const last = new Set(Object.keys(from.columns));
         const next = new Set(Object.keys(to.columns));
 
         function diffKeys<T>(cmp: (a: T, b: T) => number, a: T[], b: T[]): KeyChange<T> {
@@ -224,18 +220,18 @@ export class Model<T extends TableType> extends ModelClass<T> {
             return diff;
         }
 
-        const fromPK = this.primaryKey.length > 0 ? [this.primaryKey] : [];
+        const fromPK = from.primaryKey.length > 0 ? [from.primaryKey] : [];
         const toPK = to.primaryKey.length > 0 ? [to.primaryKey] : [];
 
         return {
             removed: new Set([...last].filter(x => !next.has(x))),
-            changed: new Set([...last].filter(x => next.has(x)).filter(x => !isDeepStrictEqual(this.columns[x].column.serialize(), to.columns[x].column.serialize()))),
+            changed: new Set([...last].filter(x => next.has(x)).filter(x => !isDeepStrictEqual(from.columns[x], to.columns[x]))),
             added: new Set([...next].filter(x => !last.has(x))),
             keys: {
                 primary: diffKeys(cmpKey, fromPK, toPK),
-                unique: diffKeys(cmpKey, this.uniqueKeys, to.uniqueKeys),
-                indices: diffKeys(cmpKey, this.indices, to.indices),
-                foreign: diffKeys(cmpForeignKey, this.foreignKeys.map(Model.fkMap), to.foreignKeys.map(Model.fkMap))
+                unique: diffKeys(cmpKey, from.uniqueKey, to.uniqueKey),
+                indices: diffKeys(cmpKey, from.indices, to.indices),
+                foreign: diffKeys(cmpForeignKey, from.foreignKeys, to.foreignKeys)
             }
         };
     }
@@ -249,17 +245,17 @@ export class Model<T extends TableType> extends ModelClass<T> {
     static getColumnList(cols: string[]): string {
         return cols.map(this.getConstraintColumnName).join("_");
     }
-    static getPrimaryConstraintName(model: Model<TableType>): string {
-        return "PK_" + this.getConstraintColumnName(model.modelName);
+    static getPrimaryConstraintName(model: SerializedModel): string {
+        return "PK_" + this.getConstraintColumnName(model.name);
     }
-    static getConstraintName(type: "IX" | "UQ", model: Model<TableType>, cols: string[]): string {
-        return type + "_" + this.getConstraintColumnName(model.modelName) + "_" + this.getColumnList(cols);
+    static getConstraintName(type: "IX" | "UQ", model: SerializedModel, cols: string[]): string {
+        return type + "_" + this.getConstraintColumnName(model.name) + "_" + this.getColumnList(cols);
     }
-    static getForeignConstraintName(model: Model<TableType>, target: string, cols: string[]): string {
-        return "FK_" + this.getConstraintColumnName(model.modelName) + "_" + this.getConstraintColumnName(target) + "_" + this.getColumnList(cols);
+    static getForeignConstraintName(model: SerializedModel, target: string, cols: string[]): string {
+        return "FK_" + this.getConstraintColumnName(model.name) + "_" + this.getConstraintColumnName(target) + "_" + this.getColumnList(cols);
     }
 
-    static generateFKAdds(model: Model<TableType>, fks: ForeignKey[]): string[] {
+    static generateFKAdds(model: SerializedModel, fks: ForeignKey[]): string[] {
         const post: string[] = [];
 
         fks.forEach(fk => 
@@ -272,13 +268,13 @@ export class Model<T extends TableType> extends ModelClass<T> {
             for (var i = 0; i < post.length - 1; i++) {
                 post[i] += ",";
             }
-            post.unshift("ALTER TABLE " + identifier(model.modelName));
+            post.unshift("ALTER TABLE " + identifier(model.name));
             post[post.length - 1] += ";";
         }
 
         return post;
     }
-    static generateFKDrops(model: Model<TableType>, fks: ForeignKey[]): string[] {
+    static generateFKDrops(model: SerializedModel, fks: ForeignKey[]): string[] {
         const pre: string[] = [];
         fks.forEach(fk => 
             pre.push("DROP CONSTRAINT " + identifier(Model.getForeignConstraintName(model, fk.target, fk.from)))
@@ -287,14 +283,14 @@ export class Model<T extends TableType> extends ModelClass<T> {
             for (var i = 0; i < pre.length - 1; i++) {
                 pre[i] += ",";
             }
-            pre.unshift("ALTER TABLE " + identifier(model.modelName));
+            pre.unshift("ALTER TABLE " + identifier(model.name));
             pre[pre.length - 1] += ";";
         }
 
         return pre;
     }
 
-    static generateUQAdds(model: Model<TableType>, keys: string[][]): string[] {
+    static generateUQAdds(model: SerializedModel, keys: string[][]): string[] {
         const update: string[] = [];
         keys.forEach(x => 
             update.push("CONSTRAINT " + identifier(this.getConstraintName("UQ", model, x)) + " UNIQUE (" + this.getColumnNames(x) + ")")
@@ -302,7 +298,7 @@ export class Model<T extends TableType> extends ModelClass<T> {
 
         return update;
     }
-    static generateUQDrops(model: Model<TableType>, keys: string[][]): string[] {
+    static generateUQDrops(model: SerializedModel, keys: string[][]): string[] {
         const update: string[] = [];
         keys.forEach(x => 
             update.push("DROP CONSTRAINT " + identifier(this.getConstraintName("UQ", model, x)))
@@ -311,10 +307,10 @@ export class Model<T extends TableType> extends ModelClass<T> {
         return update;
     }
 
-    static migration(from: null, to: Model<TableType>, diffs: SchemaDiff): TableMigration;
-    static migration(from: Model<TableType>, to: null, diffs: SchemaDiff): TableMigration;
-    static migration(from: Model<TableType>, to: Model<TableType>, diffs: SchemaDiff): TableMigration;
-    static migration(from: Model<TableType> | null, to: Model<TableType> | null, diffs: SchemaDiff): {
+    static migration(from: null, to: SerializedModel, diffs: SchemaDiff): TableMigration;
+    static migration(from: SerializedModel, to: null, diffs: SchemaDiff): TableMigration;
+    static migration(from: SerializedModel, to: SerializedModel, diffs: SchemaDiff): TableMigration;
+    static migration(from: SerializedModel | null, to: SerializedModel | null, diffs: SchemaDiff): {
         pre: string[],
         update: string[],
         post: string[]
@@ -329,7 +325,13 @@ export class Model<T extends TableType> extends ModelClass<T> {
             }
 
             //Create all columns
-            Object.values(to.columns).forEach(col => update.push(identifier(col.name) + " " + col.column.sql()))
+            const cols = Object.keys(to.columns).map(x => ({name: x, col: deserializeColumn(to.columns[x])})).map(x => {
+                if (x.col == null) {
+                    throw Error("Bad column serialization: " + JSON.stringify(to.columns[x.name]));
+                }
+                return {name: x.name, col: x.col};
+            });
+            cols.forEach(col => update.push(identifier(col.name) + " " + col.col.sql()));
 
             //Add primary key
             if (to.primaryKey.length > 0) {
@@ -337,7 +339,7 @@ export class Model<T extends TableType> extends ModelClass<T> {
             }
 
             //Add unique key constraints
-            update.push(...this.generateUQAdds(to, to.uniqueKeys));
+            update.push(...this.generateUQAdds(to, to.uniqueKey));
 
             //If there are any commands
             if (update.length > 0) {
@@ -350,24 +352,24 @@ export class Model<T extends TableType> extends ModelClass<T> {
                 }
 
                 //Surround them with CREATE TABLE ( [...] );
-                update.unshift("CREATE TABLE " + identifier(to.modelName) + " (");
+                update.unshift("CREATE TABLE " + identifier(to.name) + " (");
                 update.push(");");
             }
 
             //Creating an INDEX is non-standard SQL and must be done outside CREATE TABLE
             to.indices.forEach(x => 
-                update.push("CREATE INDEX " + identifier(this.getConstraintName("IX", to, x)) + " ON " + identifier(to.modelName) + " (" + x.map(identifier) + ");")
+                update.push("CREATE INDEX " + identifier(this.getConstraintName("IX", to, x)) + " ON " + identifier(to.name) + " (" + x.map(identifier) + ");")
             );
 
             //Add foreign keys after the table was created so that other required tables also get created
-            post.push(...this.generateFKAdds(to, to.foreignKeys.map(this.fkMap)));
+            post.push(...this.generateFKAdds(to, to.foreignKeys));
         } else if (to == null) {
             //First drop all foreign keys, so we can safely delete other tables without worrying about references
             //Then drop the table
-            pre.push(...this.generateFKDrops(from, from.foreignKeys.map(this.fkMap)));
-            update.push("DROP TABLE " + identifier(from.modelName) + ";");
+            pre.push(...this.generateFKDrops(from, from.foreignKeys));
+            update.push("DROP TABLE " + identifier(from.name) + ";");
         } else {
-            const diff = diffs[from.modelName];
+            const diff = diffs[from.name];
             /*All unchanged foreign keys that reference an altered column need to be removed and readded
               to prevent a state when one column has a different type than the one it references.*/
             const refreshedFK = diff.keys.foreign.unchanged.filter(x => x.from.some(y => diff.changed.has(y)) || x.to.some(y => diffs[x.target].changed.has(y)));
@@ -377,31 +379,44 @@ export class Model<T extends TableType> extends ModelClass<T> {
             diff.keys.primary.removed.forEach(x => update.push("DROP CONSTRAINT " + identifier(this.getPrimaryConstraintName(from))));
             update.push(...this.generateUQDrops(from, diff.keys.unique.removed));
 
-            diff.removed.forEach(x => update.push("DROP " + identifier(from.columns[x].name)));
+            diff.removed.forEach(x => update.push("DROP " + identifier(x)));
             diff.changed.forEach(x => {
-                const last = from.columns[x];
-                const next = to.columns[x];
+                const last = deserializeColumn(from.columns[x]);
+                const next = deserializeColumn(to.columns[x]);
 
-                const lastType = last.column.getSQLType();
-                const nextType = next.column.getSQLType();
+                if (last == null) {
+                    throw Error("Bad column serialization: " + JSON.stringify(from.columns[x]));
+                }
+                if (next == null) {
+                    throw Error("Bad column serialization: " + JSON.stringify(to.columns[x]));
+                }
 
-                const lastNullable = last.column.getNullable();
-                const nextNullable = next.column.getNullable();
+                const lastType = last.getSQLType();
+                const nextType = next.getSQLType();
 
-                const lastDefault = last.column.getDefaultTo();
-                const nextDefault = next.column.getDefaultTo();
+                const lastNullable = last.getNullable();
+                const nextNullable = next.getNullable();
+
+                const lastDefault = last.getDefaultTo();
+                const nextDefault = next.getDefaultTo();
 
                 if (lastType !== nextType) {
-                    update.push("ALTER " + identifier(from.columns[x].name) + " TYPE " + to.columns[x].column.getSQLType())
+                    update.push("ALTER " + identifier(x) + " TYPE " + next.getSQLType())
                 }
                 if (lastNullable !== nextNullable) {
-                    update.push("ALTER " + identifier(from.columns[x].name) + " " + (nextNullable ? "DROP" : "SET") + " NOT NULL")
+                    update.push("ALTER " + identifier(x) + " " + (nextNullable ? "DROP" : "SET") + " NOT NULL")
                 }
                 if (lastDefault !== nextDefault) {
-                    update.push("ALTER " + identifier(from.columns[x].name) + (nextDefault == null ? "DROP DEFAULT" : (" SET DEFAULT " + nextDefault)));
+                    update.push("ALTER " + identifier(x) + (nextDefault == null ? "DROP DEFAULT" : (" SET DEFAULT " + nextDefault)));
                 }
             });
-            diff.added.forEach(x => update.push("ADD " + identifier(to.columns[x].name) + " " + to.columns[x].column.sql()));
+            const added = [...diff.added].map(x => ({name: x, col: deserializeColumn(to.columns[x])})).map(x => {
+                if (x.col == null) {
+                    throw Error("Bad column serialization: " + JSON.stringify(to.columns[x.name]));
+                }
+                return {name: x.name, col: x.col};
+            });
+            added.forEach(col => update.push("ADD " + identifier(col.name) + " " + col.col.sql()));
 
             update.push(...this.generateUQAdds(to, diff.keys.unique.added).map(x => "ADD " + x));
             diff.keys.primary.added.forEach(x => update.push("ADD CONSTRAINT " + identifier(this.getPrimaryConstraintName(to)) + " PRIMARY KEY (" + this.getColumnNames(to.primaryKey) + ")"));
@@ -416,17 +431,19 @@ export class Model<T extends TableType> extends ModelClass<T> {
                     update[i] = update[i] + ",";
                 }
 
-                update.unshift("ALTER TABLE " + identifier(from.modelName) + " (");
+                update.unshift("ALTER TABLE " + identifier(from.name) + " (");
                 update.push(");");
             }
 
             //TODO: Dropping indices might cause problems if a foreign key references it or there is a unique key on the same columns
             update.push(...diff.keys.indices.removed.map(x => "DROP INDEX " + identifier(this.getConstraintName("IX", from, x)) + ";"));
-            update.push(...diff.keys.indices.added.map(x => "CREATE INDEX " + identifier(this.getConstraintName("IX", to, x)) + " ON " + identifier(to.modelName) + "(" + this.getColumnList(x) + ");"));
+            update.push(...diff.keys.indices.added.map(x => "CREATE INDEX " + identifier(this.getConstraintName("IX", to, x)) + " ON " + identifier(to.name) + "(" + this.getColumnList(x) + ");"));
         }
         return {pre, update, post};
     }
 }
+
+export type SerializedModel = typeof Model.SerializedType.type;
 
 interface TableMigration {
     pre: string[];
@@ -457,7 +474,7 @@ interface SchemaDiff {
 }
 
 interface Schema {
-    [key: string]: Model<TableType>;
+    [key: string]: SerializedModel;
 }
 
 function cmpKey(a: string[], b: string[]) {
@@ -491,6 +508,15 @@ function cmpForeignKey(a: ForeignKey, b: ForeignKey): number {
     return cmpKey(a.to, b.to);
 }
 
+export function schema(models: Model<any>[]): Schema {
+    const serialized: SerializedModel[] = [];
+    models.forEach(x => serialized.push(...x.serialize()));
+
+    const res: Schema = {};
+    serialized.forEach(x => res[x.name] = x);
+    return res;
+}
+
 export function generateMigration(last: Schema, next: Schema) {
     const lastModels = new Set(Object.keys(last));
     const nextModels = new Set(Object.keys(next));
@@ -501,7 +527,7 @@ export function generateMigration(last: Schema, next: Schema) {
 
     var diff: SchemaDiff = {};
 
-    changedModels.forEach(x => diff[x] = last[x].diff(next[x]));
+    changedModels.forEach(x => diff[x] = Model.diff(last[x], next[x]));
     changedModels = changedModels.filter(x => 
         [diff[x].added, diff[x].changed, diff[x].removed].some(y => y.size > 0) ||
         [diff[x].keys.primary, diff[x].keys.indices, diff[x].keys.unique, diff[x].keys.foreign].some(y => 

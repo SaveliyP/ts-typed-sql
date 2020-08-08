@@ -3,7 +3,7 @@ import * as ops1 from "./expressions";
 
 export { database as db } from "./database";
 export { literals as l, parameters as $ } from "./utils";
-export { Model, generateMigration } from "./model";
+export { Model, generateMigration, schema } from "./model";
 export const types = {
     Column: Column,
     BigIncrements: DBBigIncrements,
