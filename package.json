@@ -1,7 +1,7 @@
 {
-  "name": "untitled",
+  "name": "typed-sql",
   "version": "0.0.1",
-  "description": "No description",
+  "description": "A type safe SQL table manager and query builder",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -14,13 +14,23 @@
     "orm",
     "typescript",
     "types",
+    "typed",
     "model",
     "models",
     "sql",
+    "query",
+    "builder",
     "entity"
   ],
   "author": "Saveliy P",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SaveliyP/ts-typed-sql.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SaveliyP/ts-typed-sql/issues"
+  },
   "devDependencies": {
     "@types/node": "^14.0.14",
     "@types/pg": "^7.14.4",

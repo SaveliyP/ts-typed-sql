@@ -12,7 +12,7 @@ export type Expression<T extends SQLType, U extends boolean, P extends Expressio
     grouped: U;
     precedence: number;
 };
-export type ExpressionF<T extends TableType> = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: {[key in keyof T]: Types[T[key]]}) => string;
+export type ExpressionF<T extends TableType> = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: {[key in keyof T]: Types[T[key]] | null}) => string;
 
 //This interface represents an instance of a table that has been aliased to a certain name, such as during a FROM clause in a SELECT statement.
 export type TableExpression<T extends TableType, P extends ExpressionF<TableSubtype>> = {

@@ -1,9 +1,9 @@
 import { TableProviders, TableTypes, ExpressionF, Expression, TableType, TableSubtype } from "../query_types";
 import { WithQuery } from "./base";
-import { FromClause } from "./select";
 import { Model } from "../model";
 import { SQLType } from "../columns";
 import { TypeParser } from "../types";
+import { FromClause } from "./common";
 
 import * as pg from "pg";
 

@@ -22,5 +22,7 @@ export async function database<T extends {[key in SQLType]: unknown}>(options: s
 
         update: b.update,
         raw: (sql: string, params?: any[]) => db.query(sql, params),
+
+        close: () => db.end()
     };
 }

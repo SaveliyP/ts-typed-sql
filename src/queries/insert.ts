@@ -1,11 +1,12 @@
 import { Expression, TableExpression, TableProvider, TableProviders, TableType, TableTypes, ExpressionF, TableSubtype } from '../query_types';
 import { identifier, replace, createTableProvider, createTableExpression, expressionWithParentheses } from '../utils';
 import { Model } from '../model';
-import { SelectStatementClass, FromClause } from './select';
+import { BaseSelectStatement } from './select';
 import { SQLType } from '../columns';
 
 import * as pg from 'pg';
 import { AllTypes, TypeParser } from '../types';
+import { getWith, getReturning, FromClause, BaseStatement } from './common';
 
 interface CompleteInsertQuery<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType> {
     types: TypeParser<Types>;
@@ -19,15 +20,6 @@ interface CompleteInsertQuery<Types extends AllTypes, CTE extends TableTypes, P 
 function toQuery
 <Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType>
 (insertStmt: CompleteInsertQuery<Types, CTE, P, I, V, R>, parameters: TableSubtype, names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>): string {
-    function getWith() {
-        const creation: string[] = [];
-        for (const x in insertStmt.cte) {
-            creation.push(identifier(x) + " AS (" + insertStmt.cte[x]()(names, args, types)(parameters) + ")");
-        }
-
-        return creation.length > 0 ? ("WITH " + (insertStmt.recursiveWith ? "RECURSIVE " : "") + creation.join(",")) : "";
-    }
-
     function getInto() {
         var values: string[];
         if (insertStmt.values instanceof Array) {
@@ -50,61 +42,24 @@ function toQuery
         }
     }
 
-    function getReturning() {
-        const returning: string[] = [];
-        const mapper = expressionWithParentheses(0, names, args, types, parameters);
-        for (const key in insertStmt.returning) {
-            returning.push(mapper(insertStmt.returning[key]) + " AS " + identifier(key));
-        }
-        return returning.length > 0 ? ("RETURNING " + returning.join(",")) : "";
-    }
-
     return [
-        getWith(),
+        getWith(insertStmt, parameters, names, args, types),
         getInto(),
         getValues(),
-        getReturning()
+        getReturning(insertStmt, parameters, names, args, types)
     ].filter(x => x.length > 0).join(" ");
 }
 
-type InsertStatementClass<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType> = TableProvider<R, P>;
-const InsertStatementClass = function<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType>(this: InsertStatementClass<Types, CTE, P, I, V, R>, query: CompleteInsertQuery<Types, CTE, P, I, V, R>): InsertStatementClass<Types, CTE, P, I, V, R> {
-    const AsTableExpression: P = function AsTableExpression(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) {
-        return (parameters: TableSubtype) => toQuery(query, parameters, names, args, types);
-    } as unknown as P; //TODO: type-cast
-
-    const InsertStatementClass = createTableProvider(createTableExpression(query.returning), AsTableExpression);
-    Object.setPrototypeOf(InsertStatementClass, Object.getPrototypeOf(this)); //TODO: rethink better way to implement this
-    return InsertStatementClass;
-} as unknown as new <Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType>(query: CompleteInsertQuery<Types, CTE, P, I, V, R>) => InsertStatementClass<Types, CTE, P, I, V, R>;
-
-type CalculateParameter<T extends ExpressionF<TableSubtype>> = [T] extends [ExpressionF<infer P>] ? P : never;
-class BaseInsertStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType> extends InsertStatementClass<Types, CTE, P, I, V, R> {
+class BaseInsertStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType> extends BaseStatement<Types, P, R> {
     protected db: pg.Client;
     protected query: CompleteInsertQuery<Types, CTE, P, I, V, R>;
     protected into: TableExpression<I, ExpressionF<{}>>;
 
     constructor(db: pg.Client, query: CompleteInsertQuery<Types, CTE, P, I, V, R>) {
-        super(query);
+        super(query.returning, (parameters, names, args, types) => toQuery(query, parameters, names, args, types));
         this.db = db;
         this.query = query;
         this.into = query.into("__inserting");
-    }
-
-    async execute(parameters: {[key in keyof CalculateParameter<P>]: Types[CalculateParameter<P>[key]]}): Promise<{[key in keyof R]: Types[R[key]]}[]> {
-        const args: unknown[] = [];
-        const sql = this()({}, args, this.query.types)(<TableSubtype> parameters); //TODO: type-cast
-        console.log("Executing " + sql);
-        console.log(args);
-        const result = await this.db.query(sql, args);
-        console.log(result);
-        var output = result.rows.map(x => {
-            for (var key in this.query.returning) {
-                x[key] = this.query.types[this.query.returning[key].return_type].toJS(x[key]);
-            }
-            return x;
-        });
-        return output;
     }
 }
 
@@ -125,7 +80,7 @@ export class InsertStatement<Types extends AllTypes, CTE extends TableTypes, P e
         const res: CompleteInsertQuery<Types, CTE, P | OptVP<V>, I, OptVT<V>, {}> = replace(this.query, "values", values);
         return new InsertValuesStatement(this.db, res);
     }
-    insertFrom<Q extends ExpressionF<TableSubtype>, T extends FromClause<{}, P>, G extends {[key: string]: Expression<SQLType, true, P | Q>}, V extends Req<I>>(lambda: (cte: TableProviders<CTE, ExpressionF<{}>>) => SelectStatementClass<Types, {}, P | Q, T, G, V>): InsertValuesStatement<Types, CTE, P | Q, I, V> {
+    insertFrom<Q extends ExpressionF<TableSubtype>, T extends FromClause<{}, P>, G extends {[key: string]: Expression<SQLType, true, P | Q>}, V extends Req<I>>(lambda: (cte: TableProviders<CTE, ExpressionF<{}>>) => BaseSelectStatement<Types, {}, P | Q, T, G, V>): InsertValuesStatement<Types, CTE, P | Q, I, V> {
         const cteProviders: TableProviders<CTE, ExpressionF<{}>> = <any> {}; //TODO: <any>
 
         for (let key in this.query.cte) {

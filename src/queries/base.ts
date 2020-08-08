@@ -1,11 +1,12 @@
 import { TableTypes, ExpressionF, TableProviders, TableType, TableSubtype } from "../query_types";
-import { FromQuery, FromClause, FromClauseProviders } from "./select";
+import { FromQuery } from "./select";
 import { DeleteStatement } from "./delete";
 import { InsertStatement } from "./insert";
 import { UpdateStatement } from "./update";
 import { SQLType } from "../columns";
 import { Model } from "../model";
 import { TypeParser } from "../types";
+import { FromClause, FromClauseProviders } from "./common";
 
 import * as pg from 'pg';
 
@@ -33,7 +34,7 @@ export class WithQuery<Types extends {[key in SQLType]: unknown}, CTE extends Ta
             conditions: [],
             groups: {},
             groupConditions: [],
-            selected: {},
+            returning: {},
             orderBy: []
         });
     }
@@ -67,6 +68,7 @@ export class WithQuery<Types extends {[key in SQLType]: unknown}, CTE extends Ta
             cte: this.cte,
             into: model,
             using: {},
+            conditions: [],
             set: {},
             returning: {}
         });

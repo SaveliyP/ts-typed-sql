@@ -58,9 +58,9 @@ export const parameters: {[key in SQLType]: <K extends string>(id: K) => Express
 
 export function $<T extends SQLType, K extends string>(id: K, type: T): Expression<T, true, ExpressionF<{[key in K]: T}>> {
     var exec = function<Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) {
-        return function(parameters: {[key in K]: Types[T]}) {
+        return function(parameters: {[key in K]: Types[T] | null}) {
             if (names[id] == null) {
-                args.push(types[type].toSQL(parameters[id]));
+                args.push(parameters[id] == null ? null : types[type].toSQL(parameters[id]));
                 names[id] = args.length;
             }
 
@@ -74,7 +74,7 @@ export function $<T extends SQLType, K extends string>(id: K, type: T): Expressi
     });
 }
 
-export const literals: {[key in SQLType]: (value: string) => Expression<key, true, ExpressionF<{}>>} = {
+export const literals: {[key in SQLType]: (value: string | null) => Expression<key, true, ExpressionF<{}>>} = {
     biginteger: value => raw(value, "biginteger"),
     binary: value => raw(value, "binary"),
     boolean: value => raw(value, "boolean"),
@@ -90,7 +90,7 @@ export const literals: {[key in SQLType]: (value: string) => Expression<key, tru
     uuid: value => raw(value, "uuid"),
 };
 
-export function raw<T extends SQLType>(value: string, type: T): Expression<T, true, ExpressionF<{}>> {
+export function raw<T extends SQLType>(value: string | null, type: T): Expression<T, true, ExpressionF<{}>> {
     var exec = function(names: {[key: string]: number}, args: unknown[]) {
         args.push(value);
         const id = args.length;
