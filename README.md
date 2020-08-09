@@ -1,5 +1,5 @@
-# ts-typed-sql
-A fully typed SQL builder for TypeScript.
+# TypeSQL
+A fully typed table definer and SQL builder for TypeScript.
 
 Eventually it should support all possible SQL statements while retaining type information. Right now it supports defining models, SELECT, INSERT, UPDATE and DELETE statements with CTEs, some operators and the avg() function. Adding more operators and functions is just a matter of grinding through the SQL documentation. Current syntax may be slightly awkward, but it is preliminary. Any suggestions are welcome.
 
@@ -8,7 +8,7 @@ Currently I'm targetting PostgreSQL, because it has better documentation, but ev
 ### Latest working example
 
 ```typescript
-import { Model, generateMigration, schema, types as t, ops as o, defaultTypes, $, l, db } from "typed-sql";
+import { Model, generateMigration, schema, types as t, ops as o, defaultTypes, $, l, db } from "typesql";
 
 const Picture = new Model("picture", {
     id: new t.Increments(),
