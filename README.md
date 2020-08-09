@@ -8,7 +8,7 @@ Currently I'm targetting PostgreSQL, because it has better documentation, but ev
 ### Latest working example
 
 ```typescript
-import { Model, generateMigration, schema, types as t, ops as o, defaultTypes, $, l, db } from "typesql";
+import { Model, generateMigration, schema, types as t, ops as o, defaultTypes, $, l, db } from "@saveliyp/type-sql";
 
 const Picture = new Model("picture", {
     id: new t.Increments(),
