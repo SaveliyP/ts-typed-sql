@@ -1,5 +1,5 @@
 {
-  "name": "typed-sql",
+  "name": "typesql",
   "version": "0.0.1",
   "description": "A type safe SQL table manager and query builder",
   "main": "dist/index.js",
