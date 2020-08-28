@@ -1,6 +1,6 @@
-import { TableExpression, TableProvider, TableType, ExpressionF } from './query_types';
+import { TableExpression, TableProvider, TableType, ExpressionF, Expression } from './query_types';
 import { Column, deserializeColumn, SQLType } from './columns';
-import { identifier, expres } from './utils';
+import { identifier } from './utils';
 import { dict, str, array, strDict } from 'type-builder';
 import { isDeepStrictEqual } from 'util';
 
@@ -46,18 +46,18 @@ const ModelClass = function<T extends TableType>(this: ModelClass<T>, name: stri
         if (alias == null) {
             return () => () => identifier(res.modelName);
         } else {
-            var expr: TableExpression<T, ExpressionF<{}>> = <any> {}; //TODO: <any>
+            var expr: TableExpression<T, ExpressionF<{}>> = <any> {}; //WARN: Type-cast
             for (let key in res.columns) {
-                expr[key] = expres(() => () => identifier(alias) + "." + identifier(key), res.columns[key].column.type, 99);
+                expr[key] = new Expression(() => () => identifier(alias) + "." + identifier(key), res.columns[key].column.type, false, 99);
             }
             return expr;
         }
     }
     const res = Object.assign(Model, {
         modelName: name,
-        columns: <ModelDefinition<T>> <any> null //TODO: <any>
+        columns: <ModelDefinition<T>> <any> null //WARN: Type-cast
     });
-    const ret = <ModelClass<T>> <any> res; //TODO: <any>
+    const ret = <ModelClass<T>> <any> res; //WARN: Type-cast
     res.columns = mapValues(obj, ret);
 
     Object.setPrototypeOf(Model, Object.getPrototypeOf(this)); //TODO: rethink better way to implement this
@@ -473,7 +473,7 @@ interface SchemaDiff {
     [key: string]: ModelDiff;
 }
 
-interface Schema {
+export interface Schema {
     [key: string]: SerializedModel;
 }
 
@@ -515,6 +515,15 @@ export function schema(models: Model<any>[]): Schema {
     const res: Schema = {};
     serialized.forEach(x => res[x.name] = x);
     return res;
+}
+
+export function isSchema(data: any): data is Schema {
+    for (var key in data) {
+        if (!Model.SerializedType(data[key])) {
+            return false;
+        }
+    }
+    return true;
 }
 
 export function generateMigration(last: Schema, next: Schema) {

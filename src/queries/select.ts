@@ -1,5 +1,5 @@
 import { Expression, TableExpressions, TableProvider, TableProviders, TableType, TableTypes, ExpressionF, TableSubtype } from '../query_types';
-import { identifier, replace, withParentheses, createTableProvider, createTableExpression, expressionWithParentheses } from '../utils';
+import { identifier, replace, withParentheses, expressionWithParentheses } from '../utils';
 import { SQLType } from '../columns';
 import { AllTypes, TypeParser } from '../types';
 import { getWith, getWhere, FromClauseType, FromClause, getTableExpressions, BaseStatement } from './common';
@@ -172,7 +172,7 @@ class OrderedSelectStatement<Types extends AllTypes, CTE extends TableTypes, P e
 
 export class SelectStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, T extends FromClause<CTE, P>, G extends {[key: string]: Expression<SQLType, true, P>}, S extends TableType> extends OrderedSelectStatement<Types, CTE, P, T, G, S> {
     orderBy(lambda: (t: TableExpressions<FromClauseType<CTE, T>, P>, g: G) => [Expression<SQLType, {} extends G ? boolean : true, P>]): OrderedSelectStatement<Types, CTE, P, T, G, S> {
-        //this.query.orderBy.push(lambda(this., this.query.groups));
+        //this.query.orderBy.push(lambda(this., this.query.groups)); //TODO: finish order by
         return this;
     }
 }

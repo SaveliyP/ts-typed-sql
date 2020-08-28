@@ -4,7 +4,7 @@ import { TypeParser, AllTypes } from "../types";
 import { Client } from "pg";
 
 export type FromClause<CTE extends TableTypes, P extends ExpressionF<TableSubtype>> = {[key: string]: TableProvider<TableType, P> | keyof CTE};
-type ArrFromClause<CTE extends TableTypes, P extends ExpressionF<TableSubtype>> = ((TableProvider<TableType, P> | keyof CTE)[] & {"0": any}) | [];
+type ArrFromClause<CTE extends TableTypes, P extends ExpressionF<TableSubtype>> = ((TableProvider<TableType, P> | keyof CTE)[] & {"0": any}) | []; //TODO: From with arrays instead of objects
 export type FromClauseType<CTE extends TableTypes, T extends FromClause<CTE, ExpressionF<TableSubtype>>> = {[key in keyof T]: T[key] extends keyof CTE ? CTE[T[key]] : (T[key] extends TableProvider<infer R, ExpressionF<TableSubtype>> ? R : never)};
 export type FromClauseProviders<T> = T extends TableProvider<TableType, ExpressionF<TableSubtype>> ? T : never;
 
@@ -31,13 +31,13 @@ export function getReturning<Types extends AllTypes, P extends ExpressionF<Table
 }
 
 export function getTableExpressions<CTE extends TableTypes, P extends ExpressionF<TableSubtype>, T extends FromClause<CTE, P>>(cte: TableProviders<CTE, P>, from: T) {
-    const transformed: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>> = <any> {}; //TODO: <any> is bad, there probably exists some type that can cause errors
+    const transformed: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>> = <any> {}; //WARN: Type-cast
     for (const x in from) {
         const fn = from[x];
         if (typeof fn === 'string') {
-            transformed[x] = <any> cte[fn](x); //TODO: <any> is bad
+            transformed[x] = <any> cte[fn](x); //WARN: Type-cast
         } else {
-            transformed[x] = (<any> fn)(x); //TODO: <any> is bad
+            transformed[x] = (<any> fn)(x); //WARN: Type-cast
         }
     }
 
@@ -54,7 +54,7 @@ const BaseStatementClass = function
 ): BaseStatementClass<Types, P, R> {
     const AsTableExpression: P = function AsTableExpression(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) {
         return (parameters: TableSubtype) => toQuery(parameters, names, args, types);
-    } as unknown as P; //TODO: type-cast
+    } as unknown as P; //WARN: Type-cast
 
     const BaseStatementClass = createTableProvider(createTableExpression(returning), AsTableExpression);
     Object.setPrototypeOf(BaseStatementClass, Object.getPrototypeOf(this)); //TODO: rethink better way to implement this
@@ -73,11 +73,11 @@ export abstract class BaseStatement<Types extends AllTypes, P extends Expression
     };
     protected abstract db: Client;
 
-    async execute(parameters: {[key in keyof CalculateParameter<P>]: Types[CalculateParameter<P>[key]] | null}): Promise<{[key in keyof R]: Types[R[key]]}[]> {
+    async execute(parameters: P extends ExpressionF<{}> ? void : {[key in keyof CalculateParameter<P>]: Types[CalculateParameter<P>[key]] | null}): Promise<{[key in keyof R]: Types[R[key]]}[]> {
         const args: unknown[] = [];
-        const sql = this()({}, args, this.query.types)(<TableSubtype> parameters); //TODO: type-cast
-        console.log(sql);
-        console.log(args);
+        const sql = this()({}, args, this.query.types)(<TableSubtype> parameters); //WARN: Type-cast
+        //console.log(sql);
+        //console.log(args);
         const result = await this.db.query(sql, args);
         var output = result.rows.map(x => {
             for (var key in this.query.returning) {

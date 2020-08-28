@@ -1,6 +1,6 @@
 {
   "name": "@saveliyp/type-sql",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "description": "A type safe SQL table manager and query builder",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 0",
-    "prepublish": "tsc"
+    "prepublishOnly": "tsc"
   },
   "keywords": [
     "orm",
@@ -24,7 +24,7 @@
     "entity"
   ],
   "author": "Saveliy P",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/SaveliyP/ts-typed-sql.git"
@@ -33,16 +33,12 @@
     "url": "https://github.com/SaveliyP/ts-typed-sql/issues"
   },
   "devDependencies": {
-    "@types/node": "^14.0.14",
+    "@types/node": "^14.6.1",
     "@types/pg": "^7.14.4",
-    "ts-loader": "^7.0.5",
-    "typescript": "^3.9.6",
-    "webpack": "^4.43.0",
-    "webpack-cli": "^3.3.12",
-    "webpack-node-externals": "^1.7.2"
+    "typescript": "^3.9.7"
   },
   "dependencies": {
-    "pg": "^8.3.0",
+    "pg": "^8.3.3",
     "type-builder": "^1.0.1"
   }
 }

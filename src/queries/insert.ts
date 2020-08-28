@@ -1,5 +1,5 @@
 import { Expression, TableExpression, TableProvider, TableProviders, TableType, TableTypes, ExpressionF, TableSubtype } from '../query_types';
-import { identifier, replace, createTableProvider, createTableExpression, expressionWithParentheses } from '../utils';
+import { identifier, replace, createTableProvider, expressionWithParentheses } from '../utils';
 import { Model } from '../model';
 import { BaseSelectStatement } from './select';
 import { SQLType } from '../columns';
@@ -7,19 +7,20 @@ import { SQLType } from '../columns';
 import * as pg from 'pg';
 import { AllTypes, TypeParser } from '../types';
 import { getWith, getReturning, FromClause, BaseStatement } from './common';
+import { raw } from '../expressions/common';
 
-interface CompleteInsertQuery<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType> {
+interface CompleteInsertQuery<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends keyof I, R extends TableType> {
     types: TypeParser<Types>;
     recursiveWith: boolean;
     cte: TableProviders<CTE, P>;
     into: Model<I>;
-    values: {[key in keyof V]: Expression<V[key], boolean, P>}[] | TableProvider<V, P>;
+    values: {[key in V]: Types[I[key]] | null}[] | TableProvider<{[key in V]: I[key]}, P>;
     returning: {[key in keyof R]: Expression<R[key], boolean, P>};
 }
 
 function toQuery
-<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType>
-(insertStmt: CompleteInsertQuery<Types, CTE, P, I, V, R>, parameters: TableSubtype, names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>): string {
+<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, K extends keyof I, R extends TableType>
+(insertStmt: CompleteInsertQuery<Types, CTE, P, I, K, R>, parameters: TableSubtype, names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>): string {
     function getInto() {
         var values: string[];
         if (insertStmt.values instanceof Array) {
@@ -32,10 +33,11 @@ function toQuery
 
     function getValues() {
         if (insertStmt.values instanceof Array) {
-            const values: string[] = Object.keys(insertStmt.values[0]);
+            const te = insertStmt.into("");
+            const values: K[] = <K[]> Object.keys(insertStmt.values[0]); //WARN: Type-cast
             const mapper = expressionWithParentheses(-99, names, args, types, parameters);
             return "VALUES " + insertStmt.values.map(x => 
-                values.map(k => x[k]).map(mapper).join(",")
+                values.map(k => raw<Types, I[K]>(x[k], te[k].return_type, types)).map(mapper).join(",")
             ).map(x => "(" + x + ")").join(",");
         } else {
             return insertStmt.values()(names, args, types)(parameters);
@@ -50,7 +52,7 @@ function toQuery
     ].filter(x => x.length > 0).join(" ");
 }
 
-class BaseInsertStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType, R extends TableType> extends BaseStatement<Types, P, R> {
+class BaseInsertStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends keyof I, R extends TableType> extends BaseStatement<Types, P, R> {
     protected db: pg.Client;
     protected query: CompleteInsertQuery<Types, CTE, P, I, V, R>;
     protected into: TableExpression<I, ExpressionF<{}>>;
@@ -63,7 +65,7 @@ class BaseInsertStatement<Types extends AllTypes, CTE extends TableTypes, P exte
     }
 }
 
-export class InsertValuesStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends TableType> extends BaseInsertStatement<Types, CTE, P, I, V, {}> {
+export class InsertValuesStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType, V extends keyof I> extends BaseInsertStatement<Types, CTE, P, I, V, {}> {
     returning<R extends {[key: string]: Expression<SQLType, boolean, ExpressionF<TableSubtype>>}>(lambda: (t: TableExpression<I, ExpressionF<{}>>) => R): BaseInsertStatement<Types, CTE, P | R[keyof R]['execute'], I, V, {[key in keyof R]: R[key]['return_type']}> {
         const returning = lambda(this.into);
         const res: CompleteInsertQuery<Types, CTE, P | R[keyof R]['execute'], I, V, {[key in keyof R]: R[key]['return_type']}> = replace(this.query, "returning", returning);
@@ -71,20 +73,16 @@ export class InsertValuesStatement<Types extends AllTypes, CTE extends TableType
     }
 }
 
-type Req<T> = {[key in keyof T]-?: NonNullable<T[key]>};
-type OptV<T extends TableType> = {[key in keyof T]?: Expression<T[key], boolean, ExpressionF<TableSubtype>>};
-type OptVT<T extends OptV<TableType>> = {[key in keyof Req<T>]: Req<T>[key]['return_type']};
-type OptVP<T extends OptV<TableType>> = Req<T>[keyof Req<T>]['execute'];
-export class InsertStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType> extends InsertValuesStatement<Types, CTE, P, I, {}> {
-    insert<V extends OptV<I>>(...values: Req<V>[]): InsertValuesStatement<Types, CTE, P | OptVP<V>, I, OptVT<V>> {
-        const res: CompleteInsertQuery<Types, CTE, P | OptVP<V>, I, OptVT<V>, {}> = replace(this.query, "values", values);
+export class InsertStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, I extends TableType> extends InsertValuesStatement<Types, CTE, P, I, never> {
+    insert<K extends keyof I>(values: {[key in K]: Types[I[key]] | null}[]): InsertValuesStatement<Types, CTE, P, I, K> {
+        const res: CompleteInsertQuery<Types, CTE, P, I, K, {}> = replace(this.query, "values", values);
         return new InsertValuesStatement(this.db, res);
     }
-    insertFrom<Q extends ExpressionF<TableSubtype>, T extends FromClause<{}, P>, G extends {[key: string]: Expression<SQLType, true, P | Q>}, V extends Req<I>>(lambda: (cte: TableProviders<CTE, ExpressionF<{}>>) => BaseSelectStatement<Types, {}, P | Q, T, G, V>): InsertValuesStatement<Types, CTE, P | Q, I, V> {
-        const cteProviders: TableProviders<CTE, ExpressionF<{}>> = <any> {}; //TODO: <any>
+    insertFrom<K extends keyof I, Q extends ExpressionF<TableSubtype>, T extends FromClause<{}, P>, G extends {[key: string]: Expression<SQLType, true, P | Q>}>(lambda: (cte: TableProviders<CTE, ExpressionF<{}>>) => BaseSelectStatement<Types, {}, P | Q, T, G, {[key in K]: I[key]}>): InsertValuesStatement<Types, CTE, P | Q, I, K> {
+        const cteProviders: TableProviders<CTE, ExpressionF<{}>> = <any> {}; //WARN: Type-cast
 
         for (let key in this.query.cte) {
-            cteProviders[key] = createTableProvider(this.query.cte[key], ()=> () => identifier(key));
+            cteProviders[key] = createTableProvider(this.query.cte[key], () => () => identifier(key));
         }
         return new InsertValuesStatement(this.db, replace(this.query, "values", lambda(cteProviders)));
     }

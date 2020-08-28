@@ -6,11 +6,23 @@ export type TableSubtype = never;
 export type TableTypes = {[key: string]: TableType};
 
 //Represents an expression returning type T, and U represents whether this expression can be used for an entire grouped row in a SELECT statement.
-export type Expression<T extends SQLType, U extends boolean, P extends ExpressionF<TableSubtype>> = {
+export type Grouped<T extends Expression<SQLType, boolean, ExpressionF<TableSubtype>>> = false extends (T extends Expression<SQLType, infer G, ExpressionF<TableSubtype>> ? G : never) ? false : true;
+export class Expression<T extends SQLType, U extends boolean, P extends ExpressionF<TableSubtype>> {
     execute: P;
     return_type: T;
-    grouped: U;
+    private grouped: U;
     precedence: number;
+
+    constructor(execute: P, return_type: T, grouped: U, precedence: number) {
+        this.execute = execute;
+        this.return_type = return_type;
+        this.grouped = grouped;
+        this.precedence = precedence;
+    }
+
+    static allGrouped<T extends Expression<SQLType, boolean, ExpressionF<TableSubtype>>>(x: T[]): Grouped<T> {
+        return <Grouped<T>> x.every(x => x.grouped); //WARN: Type-cast
+    }
 };
 export type ExpressionF<T extends TableType> = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: {[key in keyof T]: Types[T[key]] | null}) => string;
 

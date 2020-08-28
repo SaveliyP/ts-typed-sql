@@ -1,6 +1,26 @@
 import { TypeChecker, dict, optional, bool, str, intersection, num, array, union } from 'type-builder';
 
-export type SQLType = "integer" | "biginteger" | "text" | "float" | "boolean" | "date" | "datetime" | "time" | "timestamp"| "binary" | "enum" | "json" | "uuid";
+//Numeric types:
+//  SMALLINT
+//  INTEGER
+//  BIGINT
+//  REAL
+//  DOUBLE PRECISION
+//  DECIMAL/NUMERIC - main
+//BOOLEAN
+//BIT
+//BINARY
+//String types:
+//  CHAR
+//  VARCHAR
+//  TEXT - main
+//ENUM
+//JSON
+//Date/time types:
+//  TIME
+//  DATE
+//  TIMESTAMP - main
+export type SQLType = "smallint" | "integer" | "bigint" | "float" | "double" | "numeric" | "boolean" | "bit" | "binary" | "text" | "enum" | "json" | "time" | "date" | "timestamp";
 
 function ColumnType<T extends string, U extends {}>(x: {SerializedType: TypeChecker<U>}, y: T) {
     return intersection([
@@ -20,16 +40,19 @@ export abstract class Column<T extends SQLType> {
     protected isNullable?: boolean;
     protected shouldDefaultTo?: string;
 
-    nullable(): void {
+    nullable(): this {
         this.isNullable = true;
+        return this;
     }
 
-    nonNullable(): void {
+    nonNullable(): this {
         this.isNullable = false;
+        return this;
     }
 
-    defaultTo(defaultTo: string): void { //TODO: change defaultTo to be an expression
+    defaultTo(defaultTo: string): this { //TODO: change defaultTo to be an expression
         this.shouldDefaultTo = defaultTo;
+        return this;
     }
 
     abstract getSQLType(): string;
@@ -185,10 +208,10 @@ export class DBInteger extends LengthColumn<"integer"> {
     }
 }
 
-export class DBBigIncrements extends Column<"biginteger"> {
+export class DBBigIncrements extends Column<"bigint"> {
     static SerializedType = ColumnType(Column, "bigincrements");
 
-    type: "biginteger" = "biginteger";
+    type: "bigint" = "bigint";
 
     getSQLType() {
         return "BIGSERIAL";
@@ -212,10 +235,10 @@ export class DBBigIncrements extends Column<"biginteger"> {
     }
 }
 
-export class DBBigInteger extends LengthColumn<"biginteger"> {
+export class DBBigInteger extends LengthColumn<"bigint"> {
     static SerializedType = ColumnType(LengthColumn, "biginteger");
 
-    type: "biginteger" = "biginteger";
+    type: "bigint" = "bigint";
 
     getSQLType() {
         return "BIGINT" + this.getLengthType();
@@ -401,33 +424,6 @@ export class DBDate extends Column<"date"> {
     static deserialize(options: any): DBDate | null {
         if (this.SerializedType(options)) {
             const ret = new DBDate();
-            ret.deserialize(options);
-            return ret;
-        } else {
-            return null;
-        }
-    }
-}
-
-export class DBDateTime extends TimeColumn<"datetime"> {
-    static SerializedType = ColumnType(TimeColumn, "datetime");
-
-    type: "datetime" = "datetime";
-
-    getSQLType() {
-        return "TIMESTAMP";
-    }
-
-    serialize(): typeof DBDateTime.SerializedType.type {
-        return {
-            type: "datetime",
-            ...super.serialize()
-        };
-    }
-
-    static deserialize(options: any): DBDateTime | null {
-        if (this.SerializedType(options)) {
-            const ret = new DBDateTime();
             ret.deserialize(options);
             return ret;
         } else {
@@ -633,33 +629,6 @@ export class DBJsonB extends Column<"json"> {
     }
 }
 
-export class DBUUID extends Column<"uuid"> {
-    static SerializedType = ColumnType(Column, "uuid");
-
-    type: "uuid" = "uuid";
-
-    getSQLType() {
-        return "UUID";
-    }
-
-    serialize(): typeof DBUUID.SerializedType.type {
-        return {
-            type: "uuid",
-            ...super.serialize()
-        };
-    }
-
-    static deserialize(options: any): DBUUID | null {
-        if (this.SerializedType(options)) {
-            const ret = new DBUUID();
-            ret.deserialize(options);
-            return ret;
-        } else {
-            return null;
-        }
-    }
-}
-
 const ColumnTypes = (function<T extends {[key: string]: (new (...args: any[]) => Column<SQLType>) & {
     SerializedType: TypeChecker<{type: string}>;
     deserialize(options: any): Column<SQLType> | null;
@@ -675,14 +644,12 @@ const ColumnTypes = (function<T extends {[key: string]: (new (...args: any[]) =>
     float: DBFloat,
     boolean: DBBoolean,
     date: DBDate,
-    datetime: DBDateTime,
     time: DBTime,
     timestamp: DBTimestamp,
     binary: DBBinary,
     enum: DBEnum,
     json: DBJson,
     jsonb: DBJsonB,
-    uuid: DBUUID
 });
 
 export function deserializeColumn(data: any): Column<SQLType> | null {

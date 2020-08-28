@@ -1,9 +1,8 @@
-import { Column, DBBigIncrements, DBBigInteger, DBBinary, DBBoolean, DBDate, DBDateTime, DBEnum, DBFloat, DBInteger, DBIncrements, DBJson, DBJsonB, DBString, DBText, DBTime, DBTimestamp, DBUUID } from "./columns"
-import * as ops1 from "./expressions";
+import { Column, DBBigIncrements, DBBigInteger, DBBinary, DBBoolean, DBDate, DBEnum, DBFloat, DBInteger, DBIncrements, DBJson, DBJsonB, DBString, DBText, DBTime, DBTimestamp } from "./columns"
 
 export { database as db } from "./database";
-export { literals as l, parameters as $ } from "./utils";
-export { Model, generateMigration, schema } from "./model";
+export { parameters as $ } from "./utils";
+export { Model, generateMigration, schema, isSchema, Schema } from "./model";
 export const types = {
     Column: Column,
     BigIncrements: DBBigIncrements,
@@ -11,7 +10,6 @@ export const types = {
     Binary: DBBinary,
     Boolean: DBBoolean,
     Date: DBDate,
-    DateTime: DBDateTime,
     Enum: DBEnum,
     Float: DBFloat,
     Integer: DBInteger,
@@ -22,7 +20,5 @@ export const types = {
     Text: DBText,
     Time: DBTime,
     Timestamp: DBTimestamp,
-    UUID: DBUUID
 };
 export { defaultTypes, TypeParser } from "./types";
-export const ops = ops1;
