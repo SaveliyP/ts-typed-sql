@@ -4,6 +4,74 @@ import { SQLType } from '../columns';
 import { TypeParser, AllTypes, defaultTypes } from '../types';
 import { asET, Expr, AsET, ToType, Ambiguous } from './common';
 
+const NumComp2 = sqlmap({
+    "smallint": "boolean",
+    "integer": "boolean",
+    "bigint": "boolean",
+    "float": "boolean",
+    "double": "boolean",
+    "numeric": "boolean"
+});
+
+const AllBools2 = {
+    "smallint": NumComp2,
+    "integer": NumComp2,
+    "bigint": NumComp2,
+    "float": NumComp2,
+    "double": NumComp2,
+    "numeric": NumComp2,
+
+    "boolean": sqlmap({
+        "boolean": "boolean",
+    }),
+    "bit": sqlmap({
+        "bit": "boolean",
+    }),
+    "binary": sqlmap({
+        "binary": "boolean",
+    }),
+
+    "text": sqlmap({
+        "text": "boolean",
+    }),
+
+    "enum": sqlmap({
+        "enum": "boolean",
+    }),
+    "json": sqlmap({
+        "json": "boolean",
+    }),
+
+    "time": sqlmap({
+        "time": "boolean",
+    }),
+    "date": sqlmap({
+        "date": "boolean",
+        "timestamp": "boolean",
+    }),
+    "timestamp": sqlmap({
+        "date": "boolean",
+        "timestamp": "boolean",
+    }),
+};
+export type AllBools2 = {[key in keyof typeof AllBools2]: (typeof AllBools2)[key]};
+
+const AvgTypes = sqlmap({
+    "smallint": "numeric",
+    "integer": "numeric",
+    "bigint": "numeric",
+    "numeric": "numeric",
+    "float": "double",
+    "double": "double"
+});
+
+const NotTypes = sqlmap({
+    "smallint": "smallint",
+    "integer": "integer",
+    "bigint": "bigint",
+    "bit": "bit"
+});
+
 export function expressions<Types extends AllTypes>(types: TypeParser<Types>) {
 type Exp<T extends SQLType> = Expr<T, Types>;
 type ToT<A extends SQLType, T extends Exp<A>> = ToType<Types, A, T>;
@@ -60,24 +128,20 @@ function a2b(PRECEDENCE: number, str: string[]) {
     };
 };
 
-function expr2<ArgTypes extends {[key: string]: {[key2: string]: SQLType}}, G extends boolean>(args: ArgTypes, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean) {
+function aa2b<ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G extends boolean>(args: ArgTypes, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean) {
     type FS<T> = T & SQLType;
 
     type Args = FS<keyof ArgTypes>;
-    type Args2<A extends Exp<Args>> = FS<keyof ArgTypes[RA<A>]>;
+    type Args2<A extends Exp<Args>> = FS<keyof ArgTypes[RA<A>]> & Args;
 
-    type RT<A extends SQLType, T extends Exp<A>> = AsE<A, T>['return_type'];
-
-    type RA<A extends Exp<Args>> = RT<Args, A>;
-    type RB<A extends Exp<Args>, B extends Exp<Args2<A>>> = RT<Args2<A>, B>;
+    type RA<A extends Exp<Args>> = AsE<Args, A>['return_type'];
 
     type Both<A extends Exp<Args>, B extends Exp<Args2<A>>> = AsE<Args, A> | AsE<Args2<A>, B>;
-
-    function func<A extends Exp<Args>, B extends Exp<Args2<A>>>(a: A, b: B): Expression<ArgTypes[RA<A>][RB<A, B>], G extends true ? true : Grouped<Both<A, B>>, Both<A, B>['execute']> {
+    
+    function func<A extends Exp<Args>, B extends Exp<Args2<A>>>(a: A, b: B): Expression<"boolean", G extends true ? true : Grouped<Both<A, B>>, Both<A, B>['execute']> {
         const eA = asE(<Args[]> Object.keys(args), a); //WARN: Type-cast
         const eB = asE(<Args2<A>[]> Object.keys(args[eA.return_type]), b); //WARN: Type-cast
 
-        const typ: ArgTypes[RA<A>][RB<A, B>] = args[eA.return_type][eB.return_type];
         const ex1: ExpressionF<TableSubtype> = eA.execute;
         const ex2: ExpressionF<TableSubtype> = eB.execute;
         const grouped: G extends true ? true : Grouped<Both<A, B>> = <G extends true ? true : Grouped<Both<A, B>>> (group ? true : Expression.allGrouped([eA, eB])); //WARN: Type-cast
@@ -87,15 +151,15 @@ function expr2<ArgTypes extends {[key: string]: {[key2: string]: SQLType}}, G ex
             str[1] + withParentheses(ex2(names, args, types)(parameters), (inversePrecedence == true ? -PRECEDENCE : PRECEDENCE) > eB.precedence) +
             str[2];
     
-        return new Expression(exec, typ, grouped, PRECEDENCE);
+        return new Expression(exec, "boolean", grouped, PRECEDENCE);
     };
 
-    return function<A extends Exp<Args>, B extends Exp<Args2<A>>>(a: A, b: B): AsE<Args, A> extends never ? Ambiguous : AsE<Args2<A>, B> extends never ? Ambiguous : Expression<ArgTypes[RA<A>][RB<A, B>], G extends true ? true : Grouped<Both<A, B>>, Both<A, B>['execute']> {
-        return <AsE<Args, A> extends never ? Ambiguous : AsE<Args2<A>, B> extends never ? Ambiguous : Expression<ArgTypes[RA<A>][RB<A, B>], G extends true ? true : Grouped<Both<A, B>>, Both<A, B>['execute']>> func(a, b);
+    return function<A extends Exp<Args>, B extends Exp<Args2<A>>>(a: A, b: B): AsE<Args, A> extends never ? Ambiguous : AsE<Args2<A>, B> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B>>, Both<A, B>['execute']> {
+        return <AsE<Args, A> extends never ? Ambiguous : AsE<Args2<A>, B> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B>>, Both<A, B>['execute']>> func(a, b);
     };
 };
 
-function aa2b<ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G extends boolean>(args: ArgTypes, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean) {
+function aa2b3<ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G extends boolean>(args: ArgTypes, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean) {
     type FS<T> = T & SQLType;
 
     type Args = FS<keyof ArgTypes>;
@@ -108,7 +172,7 @@ function aa2b<ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G e
     function func<A extends Exp<Args>, B extends Exp<Args2<A>>, C extends Exp<Args2<B>>>(a: A, b: B, c: C): Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']> {
         const eA = asE(<Args[]> Object.keys(args), a); //WARN: Type-cast
         const eB = asE(<Args2<A>[]> Object.keys(args[eA.return_type]), b); //WARN: Type-cast
-        const eC = asE(<Args2<B>[]> Object.keys(args[eB.return_type]), b); //WARN: Type-cast
+        const eC = asE(<Args2<B>[]> Object.keys(args[eB.return_type]), c); //WARN: Type-cast
 
         const ex1: ExpressionF<TableSubtype> = eA.execute;
         const ex2: ExpressionF<TableSubtype> = eB.execute;
@@ -129,64 +193,13 @@ function aa2b<ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G e
     };
 };
 
-const NumComp2 = sqlmap({
-    "smallint": "boolean",
-    "integer": "boolean",
-    "bigint": "boolean",
-    "float": "boolean",
-    "double": "boolean",
-    "numeric": "boolean"
-});
+const between = aa2b3<AllBools2, false>(AllBools2, 6, ["", " BETWEEN ", " AND ", ""], false);
+const notBetween = aa2b3<AllBools2, false>(AllBools2, 6, ["", " NOT BETWEEN ", " AND ", ""], false);
+const betweenSymmetric = aa2b3<AllBools2, false>(AllBools2, 6, ["", " BETWEEN SYMMETRIC ", " AND ", ""], false);
+const notBetweenSymmetric = aa2b3<AllBools2, false>(AllBools2, 6, ["", " NOT BETWEEN SYMMETRIC ", " AND ", ""], false);
 
-const AllBools2 = {
-    "smallint": NumComp2,
-    "integer": NumComp2,
-    "bigint": NumComp2,
-    "float": NumComp2,
-    "double": NumComp2,
-    "numeric": NumComp2,
-
-    "boolean": sqlmap({
-        "boolean": "boolean",
-    }),
-    "bit": sqlmap({
-        "bit": "boolean",
-    }),
-    "binary": sqlmap({
-        "binary": "boolean",
-    }),
-
-    "text": sqlmap({
-        "text": "boolean",
-    }),
-
-    "enum": sqlmap({
-        "enum": "boolean",
-    }),
-    "json": sqlmap({
-        "json": "boolean",
-    }),
-
-    "time": sqlmap({
-        "time": "boolean",
-    }),
-    "date": sqlmap({
-        "date": "boolean",
-        "timestamp": "boolean",
-    }),
-    "timestamp": sqlmap({
-        "date": "boolean",
-        "timestamp": "boolean",
-    }),
-};
-
-const between = aa2b(AllBools2, 6, ["", " BETWEEN ", " AND ", ""], false);
-const notBetween = aa2b(AllBools2, 6, ["", " NOT BETWEEN ", " AND ", ""], false);
-const betweenSymmetric = aa2b(AllBools2, 6, ["", " BETWEEN SYMMETRIC ", " AND ", ""], false);
-const notBetweenSymmetric = aa2b(AllBools2, 6, ["", " NOT BETWEEN SYMMETRIC ", " AND ", ""], false);
-
-const distinct = expr2(AllBools2, 4, ["", " IS DISTINCT FROM ", ""], false);
-const notDistinct = expr2(AllBools2, 4, ["", " IS NOT DISTINCT FROM ", ""], false);
+const distinct = aa2b<AllBools2, false>(AllBools2, 4, ["", " IS DISTINCT FROM ", ""], false);
+const notDistinct = aa2b<AllBools2, false>(AllBools2, 4, ["", " IS NOT DISTINCT FROM ", ""], false);
 
 const isNull = a2b(4, ["", " IS NULL"]);
 const notNull = a2b(4, ["", " IS NOT NULL"]);
@@ -225,23 +238,9 @@ function or<T extends Exp<"boolean">[]>(...expressions: T) {
     return new Expression(exec, "boolean", grouped, PRECEDENCE);
 };
 
-const NotTypes = sqlmap({
-    "smallint": "smallint",
-    "integer": "integer",
-    "bigint": "bigint",
-    "bit": "bit"
-});
 const bitnot = expr1(NotTypes, 7, ["~", ""], false);
 const not = b2b(3, ["NOT ", ""]);
 
-const AvgTypes = sqlmap({
-    "smallint": "numeric",
-    "integer": "numeric",
-    "bigint": "numeric",
-    "numeric": "numeric",
-    "float": "double",
-    "double": "double"
-});
 const avg = expr1(AvgTypes, 99, ["AVG(", ")"], true, true);
 
 return {between, notBetween, betweenSymmetric, notBetweenSymmetric, distinct, notDistinct, isNull, notNull, isTrue, notTrue, isFalse, notFalse, isUnknown, notUnknown, and, or, not, bitnot, avg};
