@@ -2,7 +2,8 @@ import { Expression, ExpressionF, TableSubtype, Grouped } from '../query_types';
 import { withParentheses, expressionWithParentheses, sqlmap } from '../utils';
 import { SQLType } from '../columns';
 import { TypeParser, AllTypes, defaultTypes } from '../types';
-import { asET, Expr, AsET, ToType, Ambiguous } from './common';
+import { asET, Expr, AsET, Ambiguous, SQLTypeSet, possibleTypesEx, matchTypes } from './common';
+import { MatchedExprAB, CompResult, CorrectedCompResult } from './operators';
 
 const NumComp2 = sqlmap({
     "smallint": "boolean",
@@ -74,7 +75,6 @@ const NotTypes = sqlmap({
 
 export function expressions<Types extends AllTypes>(types: TypeParser<Types>) {
 type Exp<T extends SQLType> = Expr<T, Types>;
-type ToT<A extends SQLType, T extends Exp<A>> = ToType<Types, A, T>;
 type AsE<A extends SQLType, T extends Exp<A>> = AsET<Types, A, T>;
 
 const asE = <A extends SQLType, T extends Exp<A>>(allowed: A[], x: T) => asET(allowed, x, types);
@@ -128,34 +128,30 @@ function a2b(PRECEDENCE: number, str: string[]) {
     };
 };
 
-function aa2b<ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G extends boolean>(args: ArgTypes, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean) {
-    type FS<T> = T & SQLType;
-
-    type Args = FS<keyof ArgTypes>;
-    type Args2<A extends Exp<Args>> = FS<keyof ArgTypes[RA<A>]> & Args;
-
-    type RA<A extends Exp<Args>> = AsE<Args, A>['return_type'];
-
-    type Both<A extends Exp<Args>, B extends Exp<Args2<A>>> = AsE<Args, A> | AsE<Args2<A>, B>;
+function aa2b(PRECEDENCE: number, str: string[]) {
+    type Both<A extends Exp<SQLType>, B extends Exp<SQLType>> = MatchedExprAB<Types, SQLType, A, B> | MatchedExprAB<Types, SQLType, B, A>;
     
-    function func<A extends Exp<Args>, B extends Exp<Args2<A>>>(a: A, b: B): Expression<"boolean", G extends true ? true : Grouped<Both<A, B>>, Both<A, B>['execute']> {
-        const eA = asE(<Args[]> Object.keys(args), a); //WARN: Type-cast
-        const eB = asE(<Args2<A>[]> Object.keys(args[eA.return_type]), b); //WARN: Type-cast
+    return function func<A extends Exp<SQLType>, B extends Exp<SQLType>>(a: A, b: B): CorrectedCompResult<Types, A, B> {
+        var possibleA = possibleTypesEx(SQLTypeSet, a, types);
+        var possibleB = possibleTypesEx(SQLTypeSet, b, types);
+        
+        const matchedA = matchTypes(possibleA, possibleB);
+        const matchedB = matchTypes(possibleB, possibleA);
+
+        const eA: MatchedExprAB<Types, SQLType, A, B> = asET([matchedA], a, types);
+        const eB: MatchedExprAB<Types, SQLType, B, A> = asET([matchedB], b, types);
 
         const ex1: ExpressionF<TableSubtype> = eA.execute;
         const ex2: ExpressionF<TableSubtype> = eB.execute;
-        const grouped: G extends true ? true : Grouped<Both<A, B>> = <G extends true ? true : Grouped<Both<A, B>>> (group ? true : Expression.allGrouped([eA, eB])); //WARN: Type-cast
     
         const exec: Both<A, B>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
-            str[0] + withParentheses(ex1(names, args, types)(parameters), (inversePrecedence == true ? -PRECEDENCE : PRECEDENCE) > eA.precedence) +
-            str[1] + withParentheses(ex2(names, args, types)(parameters), (inversePrecedence == true ? -PRECEDENCE : PRECEDENCE) > eB.precedence) +
+            str[0] + withParentheses(ex1(names, args, types)(parameters), PRECEDENCE > eA.precedence) +
+            str[1] + withParentheses(ex2(names, args, types)(parameters), PRECEDENCE > eB.precedence) +
             str[2];
-    
-        return new Expression(exec, "boolean", grouped, PRECEDENCE);
-    };
 
-    return function<A extends Exp<Args>, B extends Exp<Args2<A>>>(a: A, b: B): AsE<Args, A> extends never ? Ambiguous : AsE<Args2<A>, B> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B>>, Both<A, B>['execute']> {
-        return <AsE<Args, A> extends never ? Ambiguous : AsE<Args2<A>, B> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B>>, Both<A, B>['execute']>> func(a, b);
+        const res: CompResult<Types, A, B> = new Expression(exec, "boolean", Expression.allGrouped([eA, eB]), PRECEDENCE);
+    
+        return <CorrectedCompResult<Types, A, B>> res;
     };
 };
 
@@ -198,8 +194,8 @@ const notBetween = aa2b3<AllBools2, false>(AllBools2, 6, ["", " NOT BETWEEN ", "
 const betweenSymmetric = aa2b3<AllBools2, false>(AllBools2, 6, ["", " BETWEEN SYMMETRIC ", " AND ", ""], false);
 const notBetweenSymmetric = aa2b3<AllBools2, false>(AllBools2, 6, ["", " NOT BETWEEN SYMMETRIC ", " AND ", ""], false);
 
-const distinct = aa2b<AllBools2, false>(AllBools2, 4, ["", " IS DISTINCT FROM ", ""], false);
-const notDistinct = aa2b<AllBools2, false>(AllBools2, 4, ["", " IS NOT DISTINCT FROM ", ""], false);
+const distinct = aa2b(4, ["", " IS DISTINCT FROM ", ""]);
+const notDistinct = aa2b(4, ["", " IS NOT DISTINCT FROM ", ""]);
 
 const isNull = a2b(4, ["", " IS NULL"]);
 const notNull = a2b(4, ["", " IS NOT NULL"]);
@@ -242,6 +238,21 @@ const bitnot = expr1(NotTypes, 7, ["~", ""], false);
 const not = b2b(3, ["NOT ", ""]);
 
 const avg = expr1(AvgTypes, 99, ["AVG(", ")"], true, true);
+const concat = function concat<A extends Exp<"text">, B extends Exp<"text">>(text: A, delimeter: B): Expression<"text", true, (AsE<"text", A> | AsE<"text", B>)['execute']> {
+    const PRECEDENCE = 99;
+    const eA = asE(["text"], text);
+    const eB = asE(["text"], delimeter);
 
-return {between, notBetween, betweenSymmetric, notBetweenSymmetric, distinct, notDistinct, isNull, notNull, isTrue, notTrue, isFalse, notFalse, isUnknown, notUnknown, and, or, not, bitnot, avg};
+    const exA: ExpressionF<TableSubtype> = eA.execute;
+    const exB: ExpressionF<TableSubtype> = eB.execute;
+
+    const exec: (AsE<"text", A> | AsE<"text", B>)['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
+        "AVG(" + withParentheses(exA(names, args, types)(parameters), -PRECEDENCE > eA.precedence) +
+        "," + withParentheses(exB(names, args, types)(parameters), -PRECEDENCE > eB.precedence) +
+        ")";
+
+    return new Expression(exec, "text", true, PRECEDENCE);
+};
+
+return {between, notBetween, betweenSymmetric, notBetweenSymmetric, distinct, notDistinct, isNull, notNull, isTrue, notTrue, isFalse, notFalse, isUnknown, notUnknown, and, or, not, bitnot, avg, concat};
 };

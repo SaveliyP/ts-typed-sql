@@ -3,6 +3,12 @@ import { Expression, ExpressionF, TableSubtype } from "../query_types";
 import { AllTypes, TypeParser } from "../types";
 import { TypeMapping } from "../utils";
 
+export type FixedPointSQLTypes = "smallint" | "integer" | "bigint" | "numeric";
+export type NumericSQLTypes = FixedPointSQLTypes | "float" | "double";
+export const FixedPointTypeSet: Set<FixedPointSQLTypes> = new Set(["smallint", "integer", "bigint", "numeric"]);
+export const NumericTypeSet: Set<NumericSQLTypes> = new Set(["smallint", "integer", "bigint", "numeric", "float", "double"]);
+export const SQLTypeSet: Set<SQLType> = new Set<SQLType>(["smallint", "integer", "bigint", "float", "double", "numeric", "boolean", "bit", "binary", "text", "enum", "json", "time", "date", "timestamp"]);
+
 //Force the TypeScript tooltip thing to fully write out the generated types instead of writing Values<...>
 type ForceCalc<T> = T extends any ? T : never;
 type Values<T> = ForceCalc<T[keyof T]>;
@@ -24,6 +30,50 @@ export function possibleTypes<Types extends AllTypes, A extends SQLType, T exten
 
     return possible;
 }
+
+export type FindTypesEx<Types extends AllTypes, A extends SQLType, T extends Expr<A, Types>> = T extends Expression<SQLType, boolean, ExpressionF<TableSubtype>> ? T['return_type'] : {[key in A]: T extends Types[key] ? key : never}[A];
+export function possibleTypesEx<Types extends AllTypes, A extends SQLType, T extends Expr<A, Types>>(allowed: Set<A>, x: T, types: TypeParser<Types>): FindTypesEx<Types, A, T>[] {
+    if (x instanceof Expression) {
+        return <FindTypesEx<Types, A, T>[]> [x.return_type]; //WARN: Type-cast
+    } else {
+        return <FindTypesEx<Types, A, T>[]> <unknown> possibleTypes(allowed, x, types); //WARN: Type-cast
+    }
+}
+
+export type MatchType<TypesA extends SQLType, TypesB extends SQLType> = (UnionToIntersection<TypesA> extends never ? (TypesA & UnionToIntersection<TypesB>) : TypesA) & SQLType;
+export function matchTypes<A extends SQLType, B extends SQLType>(a: A[], b: B[]): MatchType<A, B> {
+    if (a.length == 1) {
+        return <MatchType<A, B>> a[0];
+    } else if (b.length == 1) {
+        for (var i = 0; i < a.length; i++) {
+            if (<string> a[i] == <string> b[0]) {
+                return <MatchType<A, B>> b[0];
+            }
+        }
+        
+        throw Error(Ambiguous);
+    } else {
+        throw Error(Ambiguous);
+    }
+}
+
+export type TypeGroup = {
+    smallint: "numeric",
+    integer: "numeric",
+    bigint: "numeric",
+    float: "numeric",
+    double: "numeric",
+    numeric: "numeric",
+    boolean: "boolean",
+    bit: "bit",
+    binary: "binary",
+    text: "text",
+    enum: "enum",
+    json: "json",
+    time: "time",
+    date: "timestamp",
+    timestamp: "timestamp",
+};
 
 export function raw<Types extends AllTypes, T extends SQLType>(value: Types[T] | null, type: T, types: TypeParser<Types>): Expression<T, true, ExpressionF<{}>> {
     const exec = function(names: {[key: string]: number}, args: unknown[]) {

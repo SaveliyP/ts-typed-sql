@@ -114,11 +114,11 @@ await c.into(Picture).insert([{
 const o = c.operator;
 const l = c.literal;
 
-await c.update(User).where(t => o(t.id, '=', l.integer(1))).set(t => ({
+await c.update(User).where(t => o(t.id, '=', 1)).set(t => ({
     profile_picture: 1
 })).execute();
 
-await c.update(User).where(t => o(t.id, '=', l.integer(2))).set(t => ({
+await c.update(User).where(t => o(t.id, '=', 2)).set(t => ({
     profile_picture: 3
 })).execute();
 
@@ -160,7 +160,7 @@ await c.with({
     unused2: "test2",
     test2: c.from({user: User}).groupBy(t => ({a: t.user.id, b: t.user.email, c: $.boolean("a")})).select((t, g) => ({id: g.a, email: g.b, test: $.text("b")}))
 })
-.where(t => e.and(o(t.p.height, '>=', l.integer(200)), o(t.p.width, '>=', l.integer(200)), $.boolean("check_parameter")))
+.where(t => e.and(o(t.p.height, '>=', 200), o(t.p.width, '>=', 200), $.boolean("check_parameter")))
 .where(t => o(t.p.id, '=', t.u.profile_picture))
 .where(t => o(t.unused.id, '=', t.unused.id))
 .where(() => o($.text("string_parameter"), '=', ""))
@@ -188,7 +188,7 @@ await c.with({
 ### Deleting data
 
 ```typescript
-await c.deleteFrom(Picture).where(t => o(t.id, '=', l.integer(2))).returning(t => ({
+await c.deleteFrom(Picture).where(t => o(t.id, '=', 2)).returning(t => ({
     w: t.width,
     h: t.height
 })).execute();
@@ -397,7 +397,7 @@ The `FROM` clause of a query.
 
 - `conditionFunc`: `Function`. This function takes `t` as a parameter and must return a boolean `Expression`. `t` contains each table from the `FROM` clause, with each table containing each column of that table.
 
-The `WHERE` clause of a query.
+The `WHERE` clause of a query. Multiple calls to this function are combined with `AND`.
 
 #### `groupBy(groupFunc)`
 
@@ -409,7 +409,7 @@ The `GROUP BY` clause of a query. Adding this clause to a query changes the beha
 
 - `conditionFunc`: `Function`. This function takes `t` and `g` as parameters and must return a boolean `Expression`. `t` contains each table from the `FROM` clause, with each table containing each column of that table. `g`  contains each grouped value.
 
-The `HAVING` clause of a query. Similar to `WHERE`, except the returned `Expression`s must aggregated.
+The `HAVING` clause of a query. Similar to `WHERE`, except the returned `Expression`s must aggregated. Multiple calls to this function are combined with `AND`.
 
 #### `select(selectFunc)`
 
@@ -422,8 +422,6 @@ The `SELECT` clause of a query. Similar to `GROUP BY`, except depending on wheth
 - `orderFunc`: `Function`. This function takes `t` and `g` as parameters and must return an array of `Expression`s by which to order the results.
 
 The `ORDER BY` clause of a query.
-
-Note: this function currently does nothing.
 
 #### `limit(amount)`
 
@@ -499,7 +497,7 @@ The `RETURNING` clause of a query. This allows you to return the old values of e
 
 - `conditionFunc`: `Function`. This function takes `t` as a parameter and must return a boolean `Expression`. The properties of `t` are the columns of the model whose rows are being deleted.
 
-The `WHERE` clause of a query. This specifies which rows will be deleted.
+The `WHERE` clause of a query. This specifies which rows will be deleted. Multiple calls to this function are combined with `AND`.
 
 #### `returning(returningFunc)`
 
@@ -533,7 +531,9 @@ The connection exposes a function for operators and a collection of functions fo
 - `op`: `string`. An operator.
 - `b`: `Expression | literal`.
 
-Represents a binary operator, such as `+` or `<=`. Returns an `Expression` with the type corresponding to the operation.
+Represents a binary operator, such as `+` or `<=`. Returns an `Expression` with the type depending to the operation.
+
+Operators are: `+`, `-`, `*`, `/`, `^`, `<`, `>`, `<=`, `>=`, `=`, `<>`, `!=`. Additionally, the `operator` function has the following functions as properties, each of which represents an operator: `add`, `sub`, `mult`, `div`, `pow`, `lt`, `gt`, `lte`, `gte`, `eq`, `neq`. `neq` represents both operators `<>` and `!=`.
 
 Note: currently `operator` may cause `tsc` to lag. The type system is complex, but a better implementation will come soon.
 
@@ -543,7 +543,7 @@ Note: currently `operator` can be annoying with the bad quality literal type dis
 
 A collection of functions and expressions.
 
-Currently, they include: `between`, `notBetween`, `betweenSymmetric`, `notBetweenSymmetric`, `distinct`, `notDistinct`, `isNull`, `notNull`, `isTrue`, `notTrue`, `isFalse`, `notFalse`, `isUnknown`, `notUnknown`, `and`, `or`, `not`, `bitnot`, `avg`.
+Currently, they include: `between`, `notBetween`, `betweenSymmetric`, `notBetweenSymmetric`, `distinct`, `notDistinct`, `isNull`, `notNull`, `isTrue`, `notTrue`, `isFalse`, `notFalse`, `isUnknown`, `notUnknown`, `and`, `or`, `not`, `bitnot`, `avg`, `concat`.
 
 #### Type casting
 
@@ -660,8 +660,8 @@ Running `npm run migrate` will open a connection to the database and run the lat
 
  - Add more operators and functions
      - Casts
- - Improve literal support to be faster
  - UNION
+ - Improve literal support to be faster
  - Error messages are very complex due to complex types
  - Allow passing tables as parameters into .from()
  - Refactor

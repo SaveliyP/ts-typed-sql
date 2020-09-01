@@ -17,7 +17,7 @@ interface CompleteSelectQuery<Types extends AllTypes, CTE extends TableTypes, P 
     groups: G;
     groupConditions: Expression<"boolean", true, P>[];
     returning: {[key in keyof S]: Expression<S[key], {} extends G ? boolean : true, P>};
-    orderBy: Expression<SQLType, true, P>[];
+    orderBy: Expression<SQLType, {} extends G ? boolean : true, P>[];
     limit?: number;
     offset?: number;
 }
@@ -112,14 +112,14 @@ export class FromQuery<Types extends AllTypes, CTE extends TableTypes, P extends
     }
 
     groupBy<G extends {[key: string]: Expression<SQLType, boolean, ExpressionF<TableSubtype>>}>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>>) => G): GroupedQuery<Types, CTE, P | G[keyof G]['execute'], T, ConvertGroupedQuery<P | G[keyof G]['execute'], G>> {
-        const groups: ConvertGroupedQuery<P | G[keyof G]['execute'], G> = <any> lambda(this.from);
-        return new GroupedQuery<Types, CTE, P | G[keyof G]['execute'], T, ConvertGroupedQuery<P | G[keyof G]['execute'], G>>(this.db, replace(this.query, "groups", groups), this.from);
+        const groups: ConvertGroupedQuery<P | G[keyof G]['execute'], G> = <any> lambda(this.from); //WARN: Type-cast
+        return new GroupedQuery<Types, CTE, P | G[keyof G]['execute'], T, ConvertGroupedQuery<P | G[keyof G]['execute'], G>>(this.db, replace(replace(this.query, "groups", groups), "orderBy", []), this.from);
     }
 
     select<S extends {[key: string]: Expression<SQLType, boolean, ExpressionF<TableSubtype>>}>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>>) => S): SelectStatement<Types, CTE, P | S[keyof S]['execute'], T, {}, {[key in keyof S]: S[key]['return_type']}> {
         const select = lambda(this.from);
         const res: CompleteSelectQuery<Types, CTE, P | S[keyof S]['execute'], T, {}, {[key in keyof S]: S[key]['return_type']}> = replace(this.query, "returning", select);
-        return new SelectStatement(this.db, res);
+        return new SelectStatement(this.db, res, this.from);
     }
 }
 
@@ -141,7 +141,7 @@ class GroupedQuery<Types extends AllTypes, CTE extends TableTypes, P extends Exp
     select<S extends {[key: string]: Expression<SQLType, {} extends G ? boolean : true, ExpressionF<TableSubtype>>}>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, P>, groups: G) => S): SelectStatement<Types, CTE, P | S[keyof S]['execute'], T, G, {[key in keyof S]: S[key]['return_type']}> {
         const select = lambda(this.from, this.query.groups);
         const res: CompleteSelectQuery<Types, CTE, P | S[keyof S]['execute'], T, G, {[key in keyof S]: S[key]['return_type']}> = replace(this.query, "returning", select);
-        return new SelectStatement(this.db, res);
+        return new SelectStatement(this.db, res, this.from);
     }
 }
 
@@ -171,8 +171,14 @@ class OrderedSelectStatement<Types extends AllTypes, CTE extends TableTypes, P e
 }
 
 export class SelectStatement<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>, T extends FromClause<CTE, P>, G extends {[key: string]: Expression<SQLType, true, P>}, S extends TableType> extends OrderedSelectStatement<Types, CTE, P, T, G, S> {
-    orderBy(lambda: (t: TableExpressions<FromClauseType<CTE, T>, P>, g: G) => [Expression<SQLType, {} extends G ? boolean : true, P>]): OrderedSelectStatement<Types, CTE, P, T, G, S> {
-        //this.query.orderBy.push(lambda(this., this.query.groups)); //TODO: finish order by
-        return this;
+    private from: TableExpressions<FromClauseType<CTE, T>, P>;
+
+    constructor(db: pg.Client, query: CompleteSelectQuery<Types, CTE, P, T, G, S>, from: TableExpressions<FromClauseType<CTE, T>, P>) {
+        super(db, query);
+        this.from = from;
+    }
+
+    orderBy<O extends Expression<SQLType, {} extends G ? boolean : true, ExpressionF<TableSubtype>>>(lambda: (t: TableExpressions<FromClauseType<CTE, T>, P>, g: G) => O[]): OrderedSelectStatement<Types, CTE, P | O['execute'], T, G, S> {
+        return new OrderedSelectStatement(this.db, replace(this.query, "orderBy", lambda(this.from, this.query.groups)));
     }
 }

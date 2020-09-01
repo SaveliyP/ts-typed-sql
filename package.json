@@ -33,7 +33,7 @@
     "url": "https://github.com/SaveliyP/ts-typed-sql/issues"
   },
   "devDependencies": {
-    "@types/node": "^14.6.1",
+    "@types/node": "^14.6.2",
     "@types/pg": "^7.14.4",
     "typescript": "^3.9.7"
   },
