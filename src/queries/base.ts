@@ -1,22 +1,20 @@
-import { TableTypes, ExpressionF, TableProviders, TableType, TableSubtype } from "../query_types";
-import { FromQuery } from "./select";
+import { TableTypes, ExpressionF, TableProviders, TableType, TableSubtype, TableExpressions, Expression } from "../query_types";
+import { FromQuery, BaseSelectStatement, BaseCombinedSelectStatement, AllSelectStatements, CombinableStatement } from "./select";
 import { DeleteStatement } from "./delete";
 import { InsertStatement } from "./insert";
 import { UpdateStatement } from "./update";
 import { SQLType } from "../columns";
 import { Model } from "../model";
-import { TypeParser } from "../types";
-import { FromClause, FromClauseProviders } from "./common";
+import { AllTypes, TypeParser } from "../types";
+import { FromClause, FromClauseProviders, FromClauseType, getExpressionsFromProviders, getFromCTE, getFromTableProviders } from "./common";
 
 import * as pg from 'pg';
 
-//TODO: wrong mental model, WITH can only take from generated tables, so Models are a level above "TableProvider"
-//TODO: can WITH take from temporary tables?
-export class WithQuery<Types extends {[key in SQLType]: unknown}, CTE extends TableTypes, P extends ExpressionF<TableSubtype>> {
-    private db: pg.Client;
-    private types: TypeParser<Types>;
-    private recursiveWith: boolean;
-    private cte: TableProviders<CTE, P>;
+export class WithQuery<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>> {
+    protected db: pg.Client;
+    protected types: TypeParser<Types>;
+    protected recursiveWith: boolean;
+    protected cte: TableProviders<CTE, P>;
 
     constructor(db: pg.Client, types: TypeParser<Types>, cte: TableProviders<CTE, P>, recursive: boolean) {
         this.db = db;
@@ -25,12 +23,13 @@ export class WithQuery<Types extends {[key in SQLType]: unknown}, CTE extends Ta
         this.recursiveWith = recursive;
     }
 
-    from<T extends FromClause<CTE, ExpressionF<TableSubtype>>>(from: T): FromQuery<Types, CTE, P | FromClauseProviders<T[keyof T]>['parameters'], T> {
-        return new FromQuery<Types, CTE, P | FromClauseProviders<T[keyof T]>['parameters'], T>(this.db, {
+    from<T extends FromClause<CTE, ExpressionF<TableSubtype>>>(from: T): FromQuery<Types, CTE, P | FromClauseProviders<T[keyof T]>['parameters'], FromClauseType<CTE, T>> {
+        type Q = FromClauseType<CTE, T>;
+        return new FromQuery<Types, CTE, P | FromClauseProviders<T[keyof T]>['parameters'], FromClauseType<CTE, T>>(this.db, {
             types: this.types,
             recursiveWith: this.recursiveWith,
             cte: this.cte,
-            from: from,
+            from: getFromTableProviders<CTE, P | FromClauseProviders<T[keyof T]>['parameters'], T>(this.cte, from),
             conditions: [],
             groups: {},
             groupConditions: [],
@@ -72,5 +71,51 @@ export class WithQuery<Types extends {[key in SQLType]: unknown}, CTE extends Ta
             set: {},
             returning: {}
         });
+    }
+}
+
+export class WithRQuery<Types extends AllTypes, CTE extends TableTypes, P extends ExpressionF<TableSubtype>> {
+    protected db: pg.Client;
+    protected types: TypeParser<Types>;
+    protected cte: {[key in keyof CTE]: CombinableStatement<Types, {}, P, CTE[key]>};
+
+    constructor(db: pg.Client, types: TypeParser<Types>, cte: {[key in keyof CTE]: CombinableStatement<Types, {}, P, CTE[key]>}) {
+        this.db = db;
+        this.types = types;
+        this.cte = cte;
+    }
+
+    recursive<Q extends ExpressionF<TableSubtype>, K extends keyof CTE>(lambda: (t: TableProviders<CTE, ExpressionF<{}>>) => {[key in K]: BaseSelectStatement<Types, {}, P | Q, {[key: string]: Expression<SQLType, true, P | Q>}, CTE[key]> | BaseCombinedSelectStatement<Types, {}, P | Q, CTE[key]>}): WithQuery<Types, CTE, P | Q> {
+        const l = lambda(getFromCTE(this.cte));
+        const newCTE: {[key in keyof CTE]: CombinableStatement<Types, {}, P | Q, CTE[key]>} = <any> {}; //WARN: Type-cast
+
+        let key1: keyof CTE;
+        for (key1 in this.cte) {
+            newCTE[key1] = this.cte[key1];
+        }
+
+        let key: K;
+        for (key in l) {
+            newCTE[key] = newCTE[key].union<P | Q>(() => l[key]);
+        }
+
+        return new WithQuery(this.db, this.types, newCTE, true);
+    }
+
+    recursiveAll<Q extends ExpressionF<TableSubtype>, K extends keyof CTE>(lambda: (t: TableProviders<CTE, ExpressionF<{}>>) => {[key in K]: AllSelectStatements<Types, {}, P | Q, CTE[key]>}): WithQuery<Types, CTE, P | Q> {
+        const l = lambda(getFromCTE(this.cte));
+        const newCTE: {[key in keyof CTE]: CombinableStatement<Types, {}, P | Q, CTE[key]>} = <any> {}; //WARN: Type-cast
+
+        let key1: keyof CTE;
+        for (key1 in this.cte) {
+            newCTE[key1] = this.cte[key1];
+        }
+
+        let key: K;
+        for (key in l) {
+            newCTE[key] = newCTE[key].unionAll<P | Q>(() => l[key]);
+        }
+
+        return new WithQuery(this.db, this.types, newCTE, true);
     }
 }

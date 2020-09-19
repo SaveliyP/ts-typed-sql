@@ -8,7 +8,12 @@ Diagram(
         ), 'skip'
     ),
     'select',
-    Optional('orderBy', 'skip'),
-    Optional('limit', 'skip'),
-    Optional('offset', 'skip')
+    AlternatingSequence(
+        Sequence(
+            Optional('orderBy', 'skip'),
+            Optional('limit', 'skip'),
+            Optional('offset', 'skip')
+        ),
+        Choice(0, 'union', 'unionAll', 'intersect', 'intersectAll', 'except', 'exceptAll')
+    )
 )

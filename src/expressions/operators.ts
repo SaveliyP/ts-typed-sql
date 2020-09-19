@@ -155,7 +155,22 @@ function compOper<Types extends AllTypes>(op: keyof typeof comparisonPrecedences
     }
 }
 
-export function op<Types extends AllTypes>(types: TypeParser<Types>) {
+export type OpT<Types extends AllTypes> = (<O extends keyof typeof comparisonPrecedences | keyof typeof mathPrecedences, A extends Expr<SQLType, Types>, B extends Expr<SQLType, Types>>(a: A, o: O, b: B) => O extends keyof typeof mathPrecedences ? CorrectedMathResult<Types, A, B> : O extends keyof typeof comparisonPrecedences ? CorrectedCompResult<Types, A, B> : Ambiguous) & {
+    add: <A, B>(a: A, b: B) => CorrectedMathResult<Types, A, B>;
+    sub: <A, B>(a: A, b: B) => CorrectedMathResult<Types, A, B>;
+    mult: <A, B>(a: A, b: B) => CorrectedMathResult<Types, A, B>;
+    div: <A, B>(a: A, b: B) => CorrectedMathResult<Types, A, B>,
+    pow: <A, B>(a: A, b: B) => CorrectedMathResult<Types, A, B>,
+    //mod: mathIntOper("%", types),
+
+    lt: <A, B>(a: A, b: B) => CorrectedCompResult<Types, A, B>,
+    gt: <A, B>(a: A, b: B) => CorrectedCompResult<Types, A, B>,
+    lte: <A, B>(a: A, b: B) => CorrectedCompResult<Types, A, B>,
+    gte: <A, B>(a: A, b: B) => CorrectedCompResult<Types, A, B>,
+    eq: <A, B>(a: A, b: B) => CorrectedCompResult<Types, A, B>,
+    neq: <A, B>(a: A, b: B) => CorrectedCompResult<Types, A, B>,
+};
+export function op<Types extends AllTypes>(types: TypeParser<Types>): OpT<Types> {
     return Object.assign(function op<O extends keyof typeof comparisonPrecedences | keyof typeof mathPrecedences, A extends Expr<SQLType, Types>, B extends Expr<SQLType, Types>>(a: A, o: O, b: B): O extends keyof typeof mathPrecedences ? CorrectedMathResult<Types, A, B> : O extends keyof typeof comparisonPrecedences ? CorrectedCompResult<Types, A, B> : Ambiguous {
         if (mathPrecedences[<keyof typeof mathPrecedences> o] != null) { //WARN: Type-cast
             return <any> mathOper(<any> o, types)(a, b); //WARN: Type-cast

@@ -1,9 +1,9 @@
 # TypeSQL
 A fully typed SQL builder for TypeScript.
 
-Eventually it should support all possible SQL statements while retaining type information. Right now it supports defining models, SELECT, INSERT, UPDATE and DELETE statements with CTEs, some operators and the avg() function. Adding more operators and functions is just a matter of grinding through the SQL documentation. Current syntax may be slightly awkward, but it is preliminary.
+Eventually it should support all possible SQL statements while retaining type information.
 
-Any suggestions and requests for extra syntax are welcome.
+Current syntax may be slightly awkward, but it is preliminary. Any suggestions and requests for extra syntax are welcome.
 
 Currently I'm targeting PostgreSQL, because it has better documentation, but eventually it will support other SQL dialects too.
 
@@ -363,11 +363,11 @@ const queryResult = await connection.raw("SELECT * FROM pg_type;");
 
 #### `with(tables)`, `withRecursive(tables)`
 
-- `tables`: `Object`. An object that contains `SELECT` statements or other statements with a `RETURNING` clause.
+- `tables`: `Object`. An object that contains `SELECT` statements or other statements with a `RETURNING` clause. `withRecursive` may only take `SELECT` statements.
 
 This function allows using [Common Table Expressions](https://www.postgresql.org/docs/current/queries-with.html) (CTEs) in a query. The `SELECT`, `INSERT`, `UPDATE` or `DELETE` statements in the passed `tables` parameter will be executed once, and their results will be available to use in the query.
 
-`withRecursive` will allow building recursive SQL queries once `UNION` is implemented.
+`withRecursive` allows building recursive SQL queries to retrieve hierarchical data.
 
 Example:
 
@@ -377,11 +377,38 @@ connection.with({
 });
 ```
 
+#### `recursive(recursiveFunc)`, `recursiveAll(recursiveFunc)`
+
+- `recursiveFunc`: `Function`. This function takes `t` as a parameter and must return an object with `SELECT` statements for some of the `SELECT` statements specified in the  `with` clause. `t` contains each table in the `WITH` clause, with each table containing each column of that table.
+
+This function specifies the recursive term of the recursive query. The recursive term can refer to itself or to another table in the `WITH` clause, but care must be taken to make sure that multiple tables don't recursively refer to each other.
+
+Example:
+
+```typescript
+db.withRecursive({
+    hierarchy: db.from({p: Post}).where(t => o.eq(t.p.id, 1)).select(({p}) => ({
+        id: p.id,
+        author: p.author,
+        parent: p.parent,
+        time: p.time,
+        text: p.text,
+        depth: l.integer(0)
+    }))
+}).recursive(({hierarchy}) => ({
+    hierarchy: db.from({p: Post}).where(t => o.eq(t.p.parent, hierarchy.id)).select(t => ({
+        ...t.p,
+        depth: o.add(hierarchy.depth, 1)
+    }))
+})).from({p: "hierarchy"}).select(t => t.p).execute();
+```
+
+
 #### `execute([parameters]): Promise<Result[]>`
 
 - `parameters`: `Object`. An object that contains values for each parameter in the query.
 
-This function executes a query and returns a Promise with the results. The type of `Result` depends on your query. A query like `connection.from({user: User}).select(t => ({id: t.user.id}))` would have a result of type `{id: number}`.
+This function executes a query and returns a Promise with the results. The type of `Result` depends on your query. A query like `connection.from({user: User}).select(t => ({id: t.user.id}))` would have a result of type `{id: number | null}`.
 
 ### Select Statement
 
@@ -434,6 +461,12 @@ The `LIMIT` clause of a query.
 - `amount`: `number`. The amount of results to skip before returning results.
 
 The `OFFSET` clause of a query.
+
+#### `union(selectFunc)`, `unionAll(selectFunc)`, `intersect(selectFunc)`, `intersectAll(selectFunc)`, `except(selectFunc)`, `exceptAll(selectFunc)`
+
+- `selectFunc`: `Function`. This function takes `t` as a parameter and must return another `SELECT` statement with the same returned values and without a `WITH` clause. `t` contains the tables in this `SELECT` statement's `WITH` clause.
+
+Allows combining the results of multiple statements.
 
 ### Insert Statement
 
@@ -519,7 +552,7 @@ This can be done with the functions in the connection's `literal` object.
 
 #### literal
 
-Contains the following functions: `smallint`, `integer`, `bigint`, `float`, `double`, `numeric`, `boolean`, `bit`, `binary`, `text`, `enum`, `json`, `time`, `date`, `timestamp`. Each function takes a literal.
+Contains the following functions: `smallint`, `integer`, `bigint`, `float`, `double`, `numeric`, `boolean`, `bit`, `binary`, `text`, `enum`, `json`, `time`, `date`, `timestamp`. Each function takes a literal and produces an `Expression`.
 
 ### Expressions and operators
 
@@ -543,7 +576,7 @@ Note: currently `operator` can be annoying with the bad quality literal type dis
 
 A collection of functions and expressions.
 
-Currently, they include: `between`, `notBetween`, `betweenSymmetric`, `notBetweenSymmetric`, `distinct`, `notDistinct`, `isNull`, `notNull`, `isTrue`, `notTrue`, `isFalse`, `notFalse`, `isUnknown`, `notUnknown`, `and`, `or`, `not`, `bitnot`, `avg`, `concat`.
+Currently, they include: `distinct(a, b)`, `notDistinct(a, b)`, `isNull(a)`, `notNull(a)`, `isTrue(a)`, `notTrue(a)`, `isFalse(a)`, `notFalse(a)`, `isUnknown(a)`, `notUnknown(a)`, `and(...)`, `or(...)`, `not(a)`, `bitnot(a)`, `avg(a)`, `concat(a, separator)`.
 
 #### Type casting
 
@@ -660,15 +693,14 @@ Running `npm run migrate` will open a connection to the database and run the lat
 
  - Add more operators and functions
      - Casts
- - UNION
+ - Add support for NULLs
+    - A type should include information about whether it is nullable and whether it has a default value
+    - Add better .defaultTo()
  - Improve literal support to be faster
  - Error messages are very complex due to complex types
  - Allow passing tables as parameters into .from()
  - Refactor
    - Move certain types and functions into the files where they make more sense
- - Add support for NULLs
-    - A type should include information about whether it is nullable and whether it has a default value
-    - Add better .defaultTo()
  - Right now, only implicit inner joins work with FROM clause. Need to add explicit joins.
  - Add typings to enums
  - Add typings to JSON
@@ -681,7 +713,6 @@ Running `npm run migrate` will open a connection to the database and run the lat
  - Prepared queries
  - SELECTs with single result as values
  - Extra syntax and options for model columns to fully implement CREATE TABLE
- - Add support for more syntax
  - CURSORs
  - Result streaming
  - MySQL & extendable dialect support

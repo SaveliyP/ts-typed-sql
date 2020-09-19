@@ -14,6 +14,51 @@ const NumComp2 = sqlmap({
     "numeric": "boolean"
 });
 
+const Categories = sqlmap({
+    "smallint": "numeric",
+    "integer": "numeric",
+    "bigint": "numeric",
+    "float": "numeric",
+    "double": "numeric",
+    "numeric": "numeric",
+
+    "boolean": "boolean",
+    "bit": "bit",
+    "binary": "binary",
+
+    "text": "text",
+
+    "enum": "enum",
+    "json": "json",
+
+    "time": "time",
+    "date": "timestamp",
+    "timestamp": "timestamp"
+});
+type Categories = {[key in keyof typeof Categories]: (typeof Categories)[key]};
+type AllowedComparisons = {[key in keyof Categories]: {[key2 in keyof Categories]: Categories[key2] extends Categories[key] ? key2 : never}[keyof Categories]};
+const AllowedTypes: {[key in keyof AllowedComparisons]: AllowedComparisons[key][]} = {
+    "smallint": ["smallint", "integer", "bigint", "float", "double", "numeric"],
+    "integer": ["smallint", "integer", "bigint", "float", "double", "numeric"],
+    "bigint": ["smallint", "integer", "bigint", "float", "double", "numeric"],
+    "float": ["smallint", "integer", "bigint", "float", "double", "numeric"],
+    "double": ["smallint", "integer", "bigint", "float", "double", "numeric"],
+    "numeric": ["smallint", "integer", "bigint", "float", "double", "numeric"],
+
+    "boolean": ["boolean"],
+    "bit": ["bit"],
+    "binary": ["binary"],
+
+    "text": ["text"],
+
+    "enum": ["enum"],
+    "json": ["json"],
+
+    "time": ["time"],
+    "date": ["date", "timestamp"],
+    "timestamp": ["date", "timestamp"]
+};
+
 const AllBools2 = {
     "smallint": NumComp2,
     "integer": NumComp2,
@@ -73,65 +118,63 @@ const NotTypes = sqlmap({
     "bit": "bit"
 });
 
-export function expressions<Types extends AllTypes>(types: TypeParser<Types>) {
-type Exp<T extends SQLType> = Expr<T, Types>;
-type AsE<A extends SQLType, T extends Exp<A>> = AsET<Types, A, T>;
-
-const asE = <A extends SQLType, T extends Exp<A>>(allowed: A[], x: T) => asET(allowed, x, types);
-
-function expr1<ArgTypes extends {[key: string]: SQLType}, G extends boolean>(args: ArgTypes, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean) {
+type Expr1Ret<Types extends AllTypes, ArgTypes extends {[key: string]: SQLType}, G extends boolean> = <T extends Expr<keyof ArgTypes & SQLType, Types>>(a: T) => AsET<Types, keyof ArgTypes & SQLType, T> extends never ? Ambiguous : Expression<ArgTypes[AsET<Types, keyof ArgTypes & SQLType, T>['return_type']], G extends true ? true : Grouped<AsET<Types, keyof ArgTypes & SQLType, T>>, AsET<Types, keyof ArgTypes & SQLType, T>['execute']>;
+function expr1<Types extends AllTypes, ArgTypes extends {[key: string]: SQLType}, G extends boolean>(types: TypeParser<Types>, args: ArgTypes, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean): Expr1Ret<Types, ArgTypes, G> {
     type FS<T> = T & SQLType;
     type Args = FS<keyof ArgTypes>;
-    function func<T extends Exp<Args>>(a: T): Expression<ArgTypes[AsE<Args, T>['return_type']], G extends true ? true : Grouped<AsE<Args, T>>, AsE<Args, T>['execute']> {
-        const eA = asE(<Args[]> Object.keys(args), a); //WARN: Type-cast
+    function func<T extends Expr<Args, Types>>(a: T): Expression<ArgTypes[AsET<Types, Args, T>['return_type']], G extends true ? true : Grouped<AsET<Types, Args, T>>, AsET<Types, Args, T>['execute']> {
+        const eA = asET(<Args[]> Object.keys(args), a, types); //WARN: Type-cast
 
-        const typ: ArgTypes[AsE<Args, T>['return_type']] = args[eA.return_type];
+        const typ: ArgTypes[AsET<Types, Args, T>['return_type']] = args[eA.return_type];
         const ex: ExpressionF<TableSubtype> = eA.execute;
-        const grouped: G extends true ? true : Grouped<AsE<Args, T>> = <G extends true ? true : Grouped<AsE<Args, T>>> (group ? true : Expression.allGrouped([eA])); //WARN: Type-cast
+        const grouped: G extends true ? true : Grouped<AsET<Types, Args, T>> = <G extends true ? true : Grouped<AsET<Types, Args, T>>> (group ? true : Expression.allGrouped([eA])); //WARN: Type-cast
     
-        const exec: AsE<Args, T>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
+        const exec: AsET<Types, Args, T>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
             str[0] + withParentheses(ex(names, args, types)(parameters), (inversePrecedence == true ? -PRECEDENCE : PRECEDENCE) > eA.precedence) + str[1];
     
         return new Expression(exec, typ, grouped, PRECEDENCE);
     };
 
-    return function<T extends Exp<Args>>(a: T): AsE<Args, T> extends never ? Ambiguous : Expression<ArgTypes[AsE<Args, T>['return_type']], G extends true ? true : Grouped<AsE<Args, T>>, AsE<Args, T>['execute']> {
-        return <AsE<Args, T> extends never ? Ambiguous : Expression<ArgTypes[AsE<Args, T>['return_type']], G extends true ? true : Grouped<AsE<Args, T>>, AsE<Args, T>['execute']>> func(a);
+    return function<T extends Expr<Args, Types>>(a: T): AsET<Types, Args, T> extends never ? Ambiguous : Expression<ArgTypes[AsET<Types, Args, T>['return_type']], G extends true ? true : Grouped<AsET<Types, Args, T>>, AsET<Types, Args, T>['execute']> {
+        return <AsET<Types, Args, T> extends never ? Ambiguous : Expression<ArgTypes[AsET<Types, Args, T>['return_type']], G extends true ? true : Grouped<AsET<Types, Args, T>>, AsET<Types, Args, T>['execute']>> func(a);
     }
-};
+}
 
-function b2b(PRECEDENCE: number, str: string[]) {
-    return function func<T extends Exp<"boolean">>(a: T): Expression<"boolean", Grouped<AsE<"boolean", T>>, AsE<"boolean", T>['execute']> {
-        const eA = asE(["boolean"], a);
+type B2BRet<Types extends AllTypes> = <T extends Expr<"boolean", Types>>(a: T) => Expression<"boolean", Grouped<AsET<Types, "boolean", T>>, AsET<Types, "boolean", T>['execute']>;
+function b2b<Types extends AllTypes>(types: TypeParser<Types>, PRECEDENCE: number, str: string[]): B2BRet<Types> {
+    return function func<T extends Expr<"boolean", Types>>(a: T): Expression<"boolean", Grouped<AsET<Types, "boolean", T>>, AsET<Types, "boolean", T>['execute']> {
+        const eA = asET(["boolean"], a, types);
 
         const ex: ExpressionF<TableSubtype> = eA.execute;
-        const grouped: Grouped<AsE<"boolean", T>> = Expression.allGrouped([eA]);
+        const grouped: Grouped<AsET<Types, "boolean", T>> = Expression.allGrouped([eA]);
     
-        const exec: AsE<"boolean", T>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
+        const exec: AsET<Types, "boolean", T>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
             str[0] + withParentheses(ex(names, args, types)(parameters), PRECEDENCE > eA.precedence) + str[1];
     
         return new Expression(exec, "boolean", grouped, PRECEDENCE);
     };
-};
+}
 
-function a2b(PRECEDENCE: number, str: string[]) {
-    return function func<T extends Exp<SQLType>>(a: T): Expression<AsE<SQLType, T>['return_type'], Grouped<AsE<SQLType, T>>, AsE<SQLType, T>['execute']> {
-        const eA = asE(<SQLType[]> Object.keys(defaultTypes), a); //WARN: Type-cast
+type A2BRet<Types extends AllTypes> = <T extends Expr<SQLType, Types>>(a: T) => Expression<AsET<Types, SQLType, T>['return_type'], Grouped<AsET<Types, SQLType, T>>, AsET<Types, SQLType, T>['execute']>;
+function a2b<Types extends AllTypes>(types: TypeParser<Types>, PRECEDENCE: number, str: string[]): A2BRet<Types> {
+    return function func<T extends Expr<SQLType, Types>>(a: T): Expression<AsET<Types, SQLType, T>['return_type'], Grouped<AsET<Types, SQLType, T>>, AsET<Types, SQLType, T>['execute']> {
+        const eA = asET(<SQLType[]> Object.keys(defaultTypes), a, types); //WARN: Type-cast
 
         const ex: ExpressionF<TableSubtype> = eA.execute;
-        const grouped: Grouped<AsE<SQLType, T>> = Expression.allGrouped([eA]);
+        const grouped: Grouped<AsET<Types, SQLType, T>> = Expression.allGrouped([eA]);
     
-        const exec: AsE<SQLType, T>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
+        const exec: AsET<Types, SQLType, T>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
             str[0] + withParentheses(ex(names, args, types)(parameters), PRECEDENCE > eA.precedence) + str[1];
     
         return new Expression(exec, "boolean", grouped, PRECEDENCE);
     };
-};
+}
 
-function aa2b(PRECEDENCE: number, str: string[]) {
-    type Both<A extends Exp<SQLType>, B extends Exp<SQLType>> = MatchedExprAB<Types, SQLType, A, B> | MatchedExprAB<Types, SQLType, B, A>;
+type AA2BRet<Types extends AllTypes> = <A extends Expr<SQLType, Types>, B extends Expr<SQLType, Types>>(a: A, b: B) => CorrectedCompResult<Types, A, B>;
+function aa2b<Types extends AllTypes>(types: TypeParser<Types>, PRECEDENCE: number, str: string[]) {
+    type Both<A extends Expr<SQLType, Types>, B extends Expr<SQLType, Types>> = MatchedExprAB<Types, SQLType, A, B> | MatchedExprAB<Types, SQLType, B, A>;
     
-    return function func<A extends Exp<SQLType>, B extends Exp<SQLType>>(a: A, b: B): CorrectedCompResult<Types, A, B> {
+    return function func<A extends Expr<SQLType, Types>, B extends Expr<SQLType, Types>>(a: A, b: B): CorrectedCompResult<Types, A, B> {
         var possibleA = possibleTypesEx(SQLTypeSet, a, types);
         var possibleB = possibleTypesEx(SQLTypeSet, b, types);
         
@@ -153,22 +196,23 @@ function aa2b(PRECEDENCE: number, str: string[]) {
     
         return <CorrectedCompResult<Types, A, B>> res;
     };
-};
+}
 
-function aa2b3<ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G extends boolean>(args: ArgTypes, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean) {
+/*type AA2B3Ret<Types extends AllTypes, ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G extends boolean> = <A extends Expr<keyof ArgTypes & SQLType, Types>, B extends Expr<Args2<A>, Types>, C extends Expr<Args2<B>, Types>>(a: A, b: B, c: C) => AsET<Types, keyof ArgTypes & SQLType, A> extends never ? Ambiguous : AsET<Types, Args2<A>, B> extends never ? Ambiguous : AsET<Types, Args2<B>, C> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']>;
+function aa2b3<Types extends AllTypes, ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G extends boolean>(types: TypeParser<Types>, args: ArgTypes, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean) {
     type FS<T> = T & SQLType;
 
     type Args = FS<keyof ArgTypes>;
-    type Args2<A extends Exp<Args>> = FS<keyof ArgTypes[RA<A>]> & Args;
+    type Args2<A extends Expr<Args, Types>> = FS<keyof ArgTypes[RA<A>]> & Args;
 
-    type RA<A extends Exp<Args>> = AsE<Args, A>['return_type'];
+    type RA<A extends Expr<Args, Types>> = AsET<Types, Args, A>['return_type'];
 
-    type Both<A extends Exp<Args>, B extends Exp<Args2<A>>, C extends Exp<Args2<B>>> = AsE<Args, A> | AsE<Args2<A>, B> | AsE<Args2<B>, C>;
+    type Both<A extends Expr<Args, Types>, B extends Expr<Args2<A>, Types>, C extends Expr<Args2<B>, Types>> = AsET<Types, Args, A> | AsET<Types, Args2<A>, B> | AsET<Types, Args2<B>, C>;
     
-    function func<A extends Exp<Args>, B extends Exp<Args2<A>>, C extends Exp<Args2<B>>>(a: A, b: B, c: C): Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']> {
-        const eA = asE(<Args[]> Object.keys(args), a); //WARN: Type-cast
-        const eB = asE(<Args2<A>[]> Object.keys(args[eA.return_type]), b); //WARN: Type-cast
-        const eC = asE(<Args2<B>[]> Object.keys(args[eB.return_type]), c); //WARN: Type-cast
+    function func<A extends Expr<Args, Types>, B extends Expr<Args2<A>, Types>, C extends Expr<Args2<B>, Types>>(a: A, b: B, c: C): Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']> {
+        const eA = asET(<Args[]> Object.keys(args), a, types); //WARN: Type-cast
+        const eB = asET(<Args2<A>[]> Object.keys(args[eA.return_type]), b, types); //WARN: Type-cast
+        const eC = asET(<Args2<B>[]> Object.keys(args[eB.return_type]), c, types); //WARN: Type-cast
 
         const ex1: ExpressionF<TableSubtype> = eA.execute;
         const ex2: ExpressionF<TableSubtype> = eB.execute;
@@ -184,75 +228,131 @@ function aa2b3<ArgTypes extends {[key: string]: {[key2: string]: "boolean"}}, G 
         return new Expression(exec, "boolean", grouped, PRECEDENCE);
     };
 
-    return function<A extends Exp<Args>, B extends Exp<Args2<A>>, C extends Exp<Args2<B>>>(a: A, b: B, c: C): AsE<Args, A> extends never ? Ambiguous : AsE<Args2<A>, B> extends never ? Ambiguous : AsE<Args2<B>, C> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']> {
-        return <AsE<Args, A> extends never ? Ambiguous : AsE<Args2<A>, B> extends never ? Ambiguous : AsE<Args2<B>, C> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']>> func(a, b, c);
+    return function<A extends Expr<Args, Types>, B extends Expr<Args2<A>, Types>, C extends Expr<Args2<B>, Types>>(a: A, b: B, c: C): AsET<Types, Args, A> extends never ? Ambiguous : AsET<Types, Args2<A>, B> extends never ? Ambiguous : AsET<Types, Args2<B>, C> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']> {
+        return <AsET<Types, Args, A> extends never ? Ambiguous : AsET<Types, Args2<A>, B> extends never ? Ambiguous : AsET<Types, Args2<B>, C> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']>> func(a, b, c);
     };
-};
+}
 
-const between = aa2b3<AllBools2, false>(AllBools2, 6, ["", " BETWEEN ", " AND ", ""], false);
-const notBetween = aa2b3<AllBools2, false>(AllBools2, 6, ["", " NOT BETWEEN ", " AND ", ""], false);
-const betweenSymmetric = aa2b3<AllBools2, false>(AllBools2, 6, ["", " BETWEEN SYMMETRIC ", " AND ", ""], false);
-const notBetweenSymmetric = aa2b3<AllBools2, false>(AllBools2, 6, ["", " NOT BETWEEN SYMMETRIC ", " AND ", ""], false);
+function aa2b31<Types extends AllTypes, G extends boolean>(types: TypeParser<Types>, PRECEDENCE: number, str: string[], group: G, inversePrecedence?: boolean) {
+    type FS<T> = T & SQLType;
 
-const distinct = aa2b(4, ["", " IS DISTINCT FROM ", ""]);
-const notDistinct = aa2b(4, ["", " IS NOT DISTINCT FROM ", ""]);
+    type Args2<A extends Expr<SQLType, Types>> = FS<keyof ArgTypes[RA<A>]>;
 
-const isNull = a2b(4, ["", " IS NULL"]);
-const notNull = a2b(4, ["", " IS NOT NULL"]);
-const isTrue = b2b(4, ["", " IS TRUE"]);
-const notTrue = b2b(4, ["", " IS NOT TRUE"]);
-const isFalse = b2b(4, ["", " IS FALSE"]);
-const notFalse = b2b(4, ["", " IS NOT FALSE"]);
-const isUnknown = b2b(4, ["", " IS UNKNOWN"]);
-const notUnknown = b2b(4, ["", " IS NOT UNKNOWN"]);
+    type RA<A extends Expr<SQLType, Types>> = AsET<Types, SQLType, A>['return_type'];
 
-function and<T extends Exp<"boolean">[]>(...expressions: T) {
-    const PRECEDENCE = 2;
+    type Both<A extends Expr<SQLType, Types>, B extends Expr<Args2<A>, Types>, C extends Expr<Args2<B>, Types>> = AsET<Types, SQLType, A> | AsET<Types, Args2<A>, B> | AsET<Types, Args2<B>, C>;
+    
+    function func<A extends Expr<SQLType, Types>, B extends Expr<Args2<A>, Types>, C extends Expr<Args2<B>, Types>>(a: A, b: B, c: C): Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']> {
+        const eA = asET(<SQLType[]> Object.keys(Categories), a, types); //WARN: Type-cast
+        const eB = asET<Types, AllowedComparisons[AsET<Types, SQLType, A>['return_type']], B>(AllowedTypes[eA.return_type], b, types); //WARN: Type-cast
+        const eC = asET(<Args2<B>[]> Object.keys(args[eB.return_type]), c, types); //WARN: Type-cast
 
-    const eE: AsE<"boolean", T[number]>[] = [];
-    for (var i = 0; i < expressions.length; i++) {
-        eE[i] = asE<"boolean", T[number]>(["boolean"], expressions[i]);
+        const ex1: ExpressionF<TableSubtype> = eA.execute;
+        const ex2: ExpressionF<TableSubtype> = eB.execute;
+        const ex3: ExpressionF<TableSubtype> = eC.execute;
+        const grouped: G extends true ? true : Grouped<Both<A, B, C>> = <G extends true ? true : Grouped<Both<A, B, C>>> (group ? true : Expression.allGrouped([eA, eB, eC])); //WARN: Type-cast
+    
+        const exec: Both<A, B, C>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
+            str[0] + withParentheses(ex1(names, args, types)(parameters), (inversePrecedence == true ? -PRECEDENCE : PRECEDENCE) > eA.precedence) +
+            str[1] + withParentheses(ex2(names, args, types)(parameters), (inversePrecedence == true ? -PRECEDENCE : PRECEDENCE) > eB.precedence) +
+            str[2] + withParentheses(ex3(names, args, types)(parameters), (inversePrecedence == true ? -PRECEDENCE : PRECEDENCE) > eC.precedence) +
+            str[3];
+    
+        return new Expression(exec, "boolean", grouped, PRECEDENCE);
+    };
+
+    return function<A extends Expr<SQLType, Types>, B extends Expr<Args2<A>, Types>, C extends Expr<Args2<B>, Types>>(a: A, b: B, c: C): AsET<Types, SQLType, A> extends never ? Ambiguous : AsET<Types, Args2<A>, B> extends never ? Ambiguous : AsET<Types, Args2<B>, C> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']> {
+        return <AsET<Types, SQLType, A> extends never ? Ambiguous : AsET<Types, Args2<A>, B> extends never ? Ambiguous : AsET<Types, Args2<B>, C> extends never ? Ambiguous : Expression<"boolean", G extends true ? true : Grouped<Both<A, B, C>>, Both<A, B, C>['execute']>> func(a, b, c);
+    };
+}*/
+
+export class TypeSQLExpressions<Types extends AllTypes> {
+    private types: TypeParser<Types>;
+
+    constructor(types: TypeParser<Types>) {
+        this.types = types;
+
+        //this.between
+        //this.notBetween
+        //this.betweenSymmetric
+        //this.notBetweenSymmetric
+        this.distinct = aa2b(this.types, 4, ["", " IS DISTINCT FROM ", ""]);
+        this.notDistinct = aa2b(this.types, 4, ["", " IS NOT DISTINCT FROM ", ""]);
+        this.isNull = a2b(this.types, 4, ["", " IS NULL"]);
+        this.notNull = a2b(this.types, 4, ["", " IS NOT NULL"]);
+        this.isTrue = b2b(this.types, 4, ["", " IS TRUE"]);
+        this.notTrue = b2b(this.types, 4, ["", " IS NOT TRUE"]);
+        this.isFalse = b2b(this.types, 4, ["", " IS FALSE"]);
+        this.notFalse = b2b(this.types, 4, ["", " IS NOT FALSE"]);
+        this.isUnknown = b2b(this.types, 4, ["", " IS UNKNOWN"]);
+        this.notUnknown = b2b(this.types, 4, ["", " IS NOT UNKNOWN"]);
+        this.bitnot = expr1(this.types, NotTypes, 7, ["~", ""], false);
+        this.not = b2b(this.types, 3, ["NOT ", ""]);
+        this.avg = expr1(this.types, AvgTypes, 99, ["AVG(", ")"], true, true);
     }
 
-	const exec: AsE<"boolean", T[number]>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
-		eE.map(expressionWithParentheses(PRECEDENCE, names, args, types, parameters)).join(" AND ");
-	const grouped: Grouped<AsE<"boolean", T[number]>> = Expression.allGrouped<AsE<"boolean", T[number]>>(eE);
-    return new Expression(exec, "boolean", grouped, PRECEDENCE);
-};
+//    between = aa2b3<Types, AllBools2, false>(this.types, AllBools2, 6, ["", " BETWEEN ", " AND ", ""], false);
+//    notBetween = aa2b3<Types, AllBools2, false>(this.types, AllBools2, 6, ["", " NOT BETWEEN ", " AND ", ""], false);
+//    betweenSymmetric = aa2b3<Types, AllBools2, false>(this.types, AllBools2, 6, ["", " BETWEEN SYMMETRIC ", " AND ", ""], false);
+//    notBetweenSymmetric = aa2b3<Types, AllBools2, false>(this.types, AllBools2, 6, ["", " NOT BETWEEN SYMMETRIC ", " AND ", ""], false);
 
-function or<T extends Exp<"boolean">[]>(...expressions: T) {
-    const PRECEDENCE = 1;
+    distinct: AA2BRet<Types>;
+    notDistinct: AA2BRet<Types>;
 
-    const eE: AsE<"boolean", T[number]>[] = [];
-    for (var i = 0; i < expressions.length; i++) {
-        eE[i] = asE<"boolean", T[number]>(["boolean"], expressions[i]);
-    }
+    isNull: A2BRet<Types>;
+    notNull: A2BRet<Types>;
+    isTrue: B2BRet<Types>;
+    notTrue: B2BRet<Types>;
+    isFalse: B2BRet<Types>;
+    notFalse: B2BRet<Types>;
+    isUnknown: B2BRet<Types>;
+    notUnknown: B2BRet<Types>;
 
-	const exec: AsE<"boolean", T[number]>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
-		eE.map(expressionWithParentheses(PRECEDENCE, names, args, types, parameters)).join(" OR ");
-	const grouped: Grouped<AsE<"boolean", T[number]>> = Expression.allGrouped<AsE<"boolean", T[number]>>(eE);
-    return new Expression(exec, "boolean", grouped, PRECEDENCE);
-};
+    and<T extends Expr<"boolean", Types>[]>(...expressions: T) {
+        const PRECEDENCE = 2;
 
-const bitnot = expr1(NotTypes, 7, ["~", ""], false);
-const not = b2b(3, ["NOT ", ""]);
+        const eE: AsET<Types, "boolean", T[number]>[] = [];
+        for (var i = 0; i < expressions.length; i++) {
+            eE[i] = asET<Types, "boolean", T[number]>(["boolean"], expressions[i], this.types);
+        }
 
-const avg = expr1(AvgTypes, 99, ["AVG(", ")"], true, true);
-const concat = function concat<A extends Exp<"text">, B extends Exp<"text">>(text: A, delimeter: B): Expression<"text", true, (AsE<"text", A> | AsE<"text", B>)['execute']> {
-    const PRECEDENCE = 99;
-    const eA = asE(["text"], text);
-    const eB = asE(["text"], delimeter);
+        const exec: AsET<Types, "boolean", T[number]>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
+            eE.map(expressionWithParentheses(PRECEDENCE, names, args, types, parameters)).join(" AND ");
+        const grouped: Grouped<AsET<Types, "boolean", T[number]>> = Expression.allGrouped<AsET<Types, "boolean", T[number]>>(eE);
+        return new Expression(exec, "boolean", grouped, PRECEDENCE);
+    };
 
-    const exA: ExpressionF<TableSubtype> = eA.execute;
-    const exB: ExpressionF<TableSubtype> = eB.execute;
+    or<T extends Expr<"boolean", Types>[]>(...expressions: T) {
+        const PRECEDENCE = 1;
 
-    const exec: (AsE<"text", A> | AsE<"text", B>)['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
-        "AVG(" + withParentheses(exA(names, args, types)(parameters), -PRECEDENCE > eA.precedence) +
-        "," + withParentheses(exB(names, args, types)(parameters), -PRECEDENCE > eB.precedence) +
-        ")";
+        const eE: AsET<Types, "boolean", T[number]>[] = [];
+        for (var i = 0; i < expressions.length; i++) {
+            eE[i] = asET<Types, "boolean", T[number]>(["boolean"], expressions[i], this.types);
+        }
 
-    return new Expression(exec, "text", true, PRECEDENCE);
-};
+        const exec: AsET<Types, "boolean", T[number]>['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
+            eE.map(expressionWithParentheses(PRECEDENCE, names, args, types, parameters)).join(" OR ");
+        const grouped: Grouped<AsET<Types, "boolean", T[number]>> = Expression.allGrouped<AsET<Types, "boolean", T[number]>>(eE);
+        return new Expression(exec, "boolean", grouped, PRECEDENCE);
+    };
 
-return {between, notBetween, betweenSymmetric, notBetweenSymmetric, distinct, notDistinct, isNull, notNull, isTrue, notTrue, isFalse, notFalse, isUnknown, notUnknown, and, or, not, bitnot, avg, concat};
-};
+    bitnot: Expr1Ret<Types, typeof NotTypes, false>;
+    not: B2BRet<Types>;
+
+    avg: Expr1Ret<Types, typeof AvgTypes, true>;
+    concat<A extends Expr<"text", Types>, B extends Expr<"text", Types>>(text: A, delimeter: B): Expression<"text", true, (AsET<Types, "text", A> | AsET<Types, "text", B>)['execute']> {
+        const PRECEDENCE = 99;
+        const eA = asET(["text"], text, this.types);
+        const eB = asET(["text"], delimeter, this.types);
+
+        const exA: ExpressionF<TableSubtype> = eA.execute;
+        const exB: ExpressionF<TableSubtype> = eB.execute;
+
+        const exec: (AsET<Types, "text", A> | AsET<Types, "text", B>)['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
+            "AVG(" + withParentheses(exA(names, args, types)(parameters), -PRECEDENCE > eA.precedence) +
+            "," + withParentheses(exB(names, args, types)(parameters), -PRECEDENCE > eB.precedence) +
+            ")";
+
+        return new Expression(exec, "text", true, PRECEDENCE);
+    };
+}

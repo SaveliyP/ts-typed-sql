@@ -44,6 +44,44 @@ export function getTableExpressions<CTE extends TableTypes, P extends Expression
     return transformed;
 }
 
+export function getExpressionsFromProviders<T extends TableTypes>(t: TableProviders<T, ExpressionF<TableSubtype>>) {
+    const transformed: TableExpressions<T, ExpressionF<{}>> = <any> {}; //WARN: Type-cast
+
+    let key: keyof T;
+    for (key in t) {
+        transformed[key] = t[key](<string> key); //WARN: Type-cast
+    }
+
+    return transformed;
+}
+
+export function getFromTableProviders<CTE extends TableTypes, P extends ExpressionF<TableSubtype>, T extends FromClause<CTE, P>>(cte: TableProviders<CTE, P>, from: T) {
+    const transformed: TableProviders<FromClauseType<CTE, T>, P> = <any> {}; //WARN: Type-cast
+
+    let key: keyof T;
+    for (key in from) {
+        const v = from[key];
+        if (typeof v === 'string') {
+            transformed[key] = <any> createTableProvider(alias => cte[<any> v](alias), () => (parameters: {}) => identifier(v)); //WARN: Type-cast
+        } else {
+            transformed[key] = <any> v; //WARN: Type-cast
+        }
+    }
+
+    return transformed;
+}
+
+export function getFromCTE<CTE extends TableTypes>(cte: TableProviders<CTE, ExpressionF<TableSubtype>>) {
+    const transformed: TableProviders<CTE, ExpressionF<{}>> = <any> {}; //WARN: Type-cast
+
+    let key: keyof CTE & string;
+    for (key in cte) {
+        transformed[key] = createTableProvider(cte[key], () => (parameters: {}) => identifier(key));
+    }
+
+    return transformed;
+}
+
 type BaseStatementClass<Types extends AllTypes, P extends ExpressionF<TableSubtype>, R extends TableType> = TableProvider<R, P>;
 const BaseStatementClass = function
 <Types extends AllTypes, P extends ExpressionF<TableSubtype>, R extends TableType>
@@ -73,18 +111,23 @@ export abstract class BaseStatement<Types extends AllTypes, P extends Expression
     };
     protected abstract db: Client;
 
-    async execute(parameters: P extends ExpressionF<{}> ? void : {[key in keyof CalculateParameter<P>]: Types[CalculateParameter<P>[key]] | null}): Promise<{[key in keyof R]: Types[R[key]]}[]> {
+    async execute(parameters: [P] extends [ExpressionF<{}>] ? (void | {}) : {[key in keyof CalculateParameter<P>]: Types[CalculateParameter<P>[key]] | null}): Promise<{[key in keyof R]: Types[R[key]] | null}[]> {
         const args: unknown[] = [];
         const sql = this()({}, args, this.query.types)(<TableSubtype> parameters); //WARN: Type-cast
-        //console.log(sql);
-        //console.log(args);
+        //console.log("Executing query:")
+        //console.log({sql, args});
         const result = await this.db.query(sql, args);
         var output = result.rows.map(x => {
             for (var key in this.query.returning) {
-                x[key] = this.query.types[this.query.returning[key].return_type].toJS(x[key]);
+                if (x[key] == null) {
+                    x[key] = null;
+                } else {
+                    x[key] = this.query.types[this.query.returning[key].return_type].toJS(x[key]);
+                }
             }
             return x;
         });
         return output;
     }
 }
+export type StatementTables<Types extends AllTypes, P extends ExpressionF<TableSubtype>, T extends TableTypes> = {[key in keyof T]: BaseStatement<Types, P, T[key]>};

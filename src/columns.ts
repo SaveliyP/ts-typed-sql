@@ -280,7 +280,8 @@ export class DBText extends Column<"text"> {
     }
 
     getSQLType() {
-        return this.textType == null ? "TEXT" : this.textType.toUpperCase();
+        //return this.textType == null ? "TEXT" : this.textType.toUpperCase();
+        return "TEXT";
     }
 
     serialize(): typeof DBText.SerializedType.type {

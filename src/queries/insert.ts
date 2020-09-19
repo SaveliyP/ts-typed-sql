@@ -78,7 +78,7 @@ export class InsertStatement<Types extends AllTypes, CTE extends TableTypes, P e
         const res: CompleteInsertQuery<Types, CTE, P, I, K, {}> = replace(this.query, "values", values);
         return new InsertValuesStatement(this.db, res);
     }
-    insertFrom<K extends keyof I, Q extends ExpressionF<TableSubtype>, T extends FromClause<{}, P>, G extends {[key: string]: Expression<SQLType, true, P | Q>}>(lambda: (cte: TableProviders<CTE, ExpressionF<{}>>) => BaseSelectStatement<Types, {}, P | Q, T, G, {[key in K]: I[key]}>): InsertValuesStatement<Types, CTE, P | Q, I, K> {
+    insertFrom<K extends keyof I, Q extends ExpressionF<TableSubtype>, G extends {[key: string]: Expression<SQLType, true, P | Q>}>(lambda: (cte: TableProviders<CTE, ExpressionF<{}>>) => BaseSelectStatement<Types, {}, P | Q, G, {[key in K]: I[key]}>): InsertValuesStatement<Types, CTE, P | Q, I, K> {
         const cteProviders: TableProviders<CTE, ExpressionF<{}>> = <any> {}; //WARN: Type-cast
 
         for (let key in this.query.cte) {
