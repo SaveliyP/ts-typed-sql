@@ -64,10 +64,12 @@ function toQuery
     }
 
     function getSelect() {
-        const selects: string[] = [];
+        const keys: ((keyof S) & string)[] = [];
         for (const key in select.returning) {
-            selects.push(mapper0(select.returning[key]) + " AS " + identifier(key));
+            keys.push(key);
         }
+        keys.sort();
+        const selects = keys.map(key => mapper0(select.returning[key]) + " AS " + identifier(key));
         if (selects.length == 0) {
             throw Error("Must select at least one value!");
         }

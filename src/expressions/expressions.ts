@@ -349,7 +349,7 @@ export class TypeSQLExpressions<Types extends AllTypes> {
         const exB: ExpressionF<TableSubtype> = eB.execute;
 
         const exec: (AsET<Types, "text", A> | AsET<Types, "text", B>)['execute'] = <Types extends AllTypes>(names: {[key: string]: number}, args: unknown[], types: TypeParser<Types>) => (parameters: TableSubtype) =>
-            "AVG(" + withParentheses(exA(names, args, types)(parameters), -PRECEDENCE > eA.precedence) +
+            "STRING_AGG(" + withParentheses(exA(names, args, types)(parameters), -PRECEDENCE > eA.precedence) +
             "," + withParentheses(exB(names, args, types)(parameters), -PRECEDENCE > eB.precedence) +
             ")";
 

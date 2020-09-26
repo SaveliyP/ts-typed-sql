@@ -28,6 +28,7 @@ function toQuery
         } else {
             values = Object.keys(insertStmt.values(""));
         }
+        values.sort();
         return "INSERT INTO " + insertStmt.into()(names, args, types)(parameters) + " AS " + JSON.stringify("__inserting") + " (" + values.map(x => JSON.stringify(x)).join(",") + ")";
     }
 
@@ -35,6 +36,7 @@ function toQuery
         if (insertStmt.values instanceof Array) {
             const te = insertStmt.into("");
             const values: K[] = <K[]> Object.keys(insertStmt.values[0]); //WARN: Type-cast
+            values.sort();
             const mapper = expressionWithParentheses(-99, names, args, types, parameters);
             return "VALUES " + insertStmt.values.map(x => 
                 values.map(k => raw<Types, I[K]>(x[k], te[k].return_type, types)).map(mapper).join(",")

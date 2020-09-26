@@ -115,7 +115,7 @@ export abstract class BaseStatement<Types extends AllTypes, P extends Expression
         const args: unknown[] = [];
         const sql = this()({}, args, this.query.types)(<TableSubtype> parameters); //WARN: Type-cast
         //console.log("Executing query:")
-        //console.log({sql, args});
+        console.log({sql, args});
         const result = await this.db.query(sql, args);
         var output = result.rows.map(x => {
             for (var key in this.query.returning) {

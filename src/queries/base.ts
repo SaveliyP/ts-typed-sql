@@ -85,7 +85,7 @@ export class WithRQuery<Types extends AllTypes, CTE extends TableTypes, P extend
         this.cte = cte;
     }
 
-    recursive<Q extends ExpressionF<TableSubtype>, K extends keyof CTE>(lambda: (t: TableProviders<CTE, ExpressionF<{}>>) => {[key in K]: BaseSelectStatement<Types, {}, P | Q, {[key: string]: Expression<SQLType, true, P | Q>}, CTE[key]> | BaseCombinedSelectStatement<Types, {}, P | Q, CTE[key]>}): WithQuery<Types, CTE, P | Q> {
+    recursive<Q extends ExpressionF<TableSubtype>, K extends keyof CTE>(lambda: (t: TableProviders<CTE, ExpressionF<{}>>) => {[key in K]: AllSelectStatements<Types, {}, P | Q, CTE[key]>}): WithQuery<Types, CTE, P | Q> {
         const l = lambda(getFromCTE(this.cte));
         const newCTE: {[key in keyof CTE]: CombinableStatement<Types, {}, P | Q, CTE[key]>} = <any> {}; //WARN: Type-cast
 

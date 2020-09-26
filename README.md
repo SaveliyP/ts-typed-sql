@@ -395,10 +395,10 @@ db.withRecursive({
         text: p.text,
         depth: l.integer(0)
     }))
-}).recursive(({hierarchy}) => ({
-    hierarchy: db.from({p: Post}).where(t => o.eq(t.p.parent, hierarchy.id)).select(t => ({
+}).recursive(w => ({
+    hierarchy: db.from({p: Post, h: w.hierarchy}).where(t => o.eq(t.p.parent, t.h.id)).select(t => ({
         ...t.p,
-        depth: o.add(hierarchy.depth, 1)
+        depth: o.add(t.h.depth, 1)
     }))
 })).from({p: "hierarchy"}).select(t => t.p).execute();
 ```
@@ -691,11 +691,14 @@ Running `npm run migrate` will open a connection to the database and run the lat
 
 ## TODO:
 
- - Add more operators and functions
-     - Casts
+ - Make SELECT and UNION statements be the same interface (so a variable can be automatically inferred to be either)
  - Add support for NULLs
     - A type should include information about whether it is nullable and whether it has a default value
     - Add better .defaultTo()
+ - Order by relies on `returning`, which hasn't been transformed into reference/accessor expressions
+ - Add more operators and functions
+     - Casts
+ - Using aggregate functions without group by groups all rows into one, disallowing non-aggregate columns
  - Improve literal support to be faster
  - Error messages are very complex due to complex types
  - Allow passing tables as parameters into .from()
