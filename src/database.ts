@@ -67,8 +67,8 @@ export class TypeSQL<Types extends AllTypes> {
         return new WithQuery<Types, {}, ExpressionF<{}>>(this.db, this.types, {}, false).from(from);
     }
 
-    select<S extends {[key: string]: Expression<SQLType, true, ExpressionF<TableSubtype>>}>(lambda: (t: {}) => S) {
-        return new WithQuery<Types, {}, ExpressionF<{}>>(this.db, this.types, {}, false).from({}).select(lambda);
+    select<S extends {[key: string]: Expression<SQLType, true, ExpressionF<TableSubtype>>}>(lambda: S | ((t: {}) => S)) {
+        return new WithQuery<Types, {}, ExpressionF<{}>>(this.db, this.types, {}, false).from({}).select(typeof lambda === 'function' ? lambda : (() => lambda));
     }
 
     deleteFrom<D extends TableType>(from: Model<D>) {

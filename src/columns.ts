@@ -50,6 +50,10 @@ export abstract class Column<T extends SQLType> {
         return this;
     }
 
+    required() {
+        return this.nonNullable();
+    }
+
     defaultTo(defaultTo: string): this { //TODO: change defaultTo to be an expression
         this.shouldDefaultTo = defaultTo;
         return this;

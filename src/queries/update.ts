@@ -102,8 +102,13 @@ export class UpdateFromStatement<Types extends AllTypes, CTE extends TableTypes,
         this.into = query.into("__updating");
         this.usingT = getTableExpressions(query.cte, query.using);
     }
-    set<K extends keyof U, Q extends TableType = {}>(lambda: (t: TableExpression<U, ExpressionF<{}>>, u: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>>) => OptV<Types, U, K, Q>): UpdateSetStatement<Types, CTE, P | ExpressionF<Q>, U, T, K> {
-        const set = lambda(this.into, this.usingT);
+    set<K extends keyof U, Q extends TableType = {}>(lambda: OptV<Types, U, K, Q> | ((t: TableExpression<U, ExpressionF<{}>>, u: TableExpressions<FromClauseType<CTE, T>, ExpressionF<{}>>) => OptV<Types, U, K, Q>)): UpdateSetStatement<Types, CTE, P | ExpressionF<Q>, U, T, K> {
+        var set: OptV<Types, U, K, Q>;
+        if (typeof lambda === 'function') {
+            set = lambda(this.into, this.usingT);
+        } else {
+            set = lambda;
+        }
         return new UpdateSetStatement<Types, CTE, P | ExpressionF<Q>, U, T, K>(this.db, replace(this.query, "set", set));
     }
 

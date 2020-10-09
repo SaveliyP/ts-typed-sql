@@ -1,5 +1,5 @@
 import { TableTypes, ExpressionF, TableProviders, TableType, TableSubtype, TableExpressions, Expression } from "../query_types";
-import { FromQuery, BaseSelectStatement, BaseCombinedSelectStatement, AllSelectStatements, CombinableStatement } from "./select";
+import { FromQuery, BaseSelectStatement, AllSelectStatements, CombinableStatement } from "./select";
 import { DeleteStatement } from "./delete";
 import { InsertStatement } from "./insert";
 import { UpdateStatement } from "./update";
@@ -24,7 +24,6 @@ export class WithQuery<Types extends AllTypes, CTE extends TableTypes, P extends
     }
 
     from<T extends FromClause<CTE, ExpressionF<TableSubtype>>>(from: T): FromQuery<Types, CTE, P | FromClauseProviders<T[keyof T]>['parameters'], FromClauseType<CTE, T>> {
-        type Q = FromClauseType<CTE, T>;
         return new FromQuery<Types, CTE, P | FromClauseProviders<T[keyof T]>['parameters'], FromClauseType<CTE, T>>(this.db, {
             types: this.types,
             recursiveWith: this.recursiveWith,

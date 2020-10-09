@@ -226,7 +226,7 @@ Returns a serialized version of this `Model`, which could potentially include mu
 
 The Column class represents every column type.
 
-#### `nullable(): this`, `nonNullable(): this`
+#### `nullable(): this`, `nonNullable(): this`, `required(): this`
 
 Sets the column as nullable or non-nullable and returns `this` to allow chaining multiple commands.
 
@@ -462,9 +462,9 @@ The `LIMIT` clause of a query.
 
 The `OFFSET` clause of a query.
 
-#### `union(selectFunc)`, `unionAll(selectFunc)`, `intersect(selectFunc)`, `intersectAll(selectFunc)`, `except(selectFunc)`, `exceptAll(selectFunc)`
+#### `union(select)`, `unionAll(select)`, `intersect(select)`, `intersectAll(select)`, `except(select)`, `exceptAll(select)`
 
-- `selectFunc`: `Function`. This function takes `t` as a parameter and must return another `SELECT` statement with the same returned values and without a `WITH` clause. `t` contains the tables in this `SELECT` statement's `WITH` clause.
+- `select`: `SELECT` statement or `Function`. Either a `SELECT` statement or a function that takes `t` as a parameter and must return a `SELECT` statement. The `SELECT` statement must have the same returned values and must be without a `WITH` clause. `t` contains the tables in this `SELECT` statement's `WITH` clause.
 
 Allows combining the results of multiple statements.
 
@@ -480,9 +480,9 @@ Allows combining the results of multiple statements.
 
 - `values`: `Data[]`. A list of values to insert into the table. `Data` must have a subset of the properties defined in the model, and each property must be a literal of the corresponding type. Any properties that are not in `Data` will use default values.
 
-#### `insertFrom(selectStatementFunc)`
+#### `insertFrom(selectStatement)`
 
-- `selectStatementFunc`: `Function`. This function takes `cte` as a parameter and must return a `SELECT` query. The `SELECT` query must not have any CTEs, but CTEs from this query can be used by referring to the properties of `cte`.
+- `selectStatement`: `SELECT` statement or `Function`. Either a `SELECT` statement or a function that takes `cte` as a parameter and must return a `SELECT` statement. The `SELECT` statement must not have any CTEs, but CTEs from this statement can be used by referring to the properties of `cte`.
 
 #### `returning(returningFunc)`
 
@@ -691,7 +691,6 @@ Running `npm run migrate` will open a connection to the database and run the lat
 
 ## TODO:
 
- - Make SELECT and UNION statements be the same interface (so a variable can be automatically inferred to be either)
  - Add support for NULLs
     - A type should include information about whether it is nullable and whether it has a default value
     - Add better .defaultTo()

@@ -1,7 +1,7 @@
 import { Expression, TableExpression, TableProvider, TableProviders, TableType, TableTypes, ExpressionF, TableSubtype } from '../query_types';
 import { identifier, replace, createTableProvider, expressionWithParentheses } from '../utils';
 import { Model } from '../model';
-import { BaseSelectStatement } from './select';
+import { AllSelectStatements, BaseSelectStatement } from './select';
 import { SQLType } from '../columns';
 
 import * as pg from 'pg';
@@ -80,12 +80,20 @@ export class InsertStatement<Types extends AllTypes, CTE extends TableTypes, P e
         const res: CompleteInsertQuery<Types, CTE, P, I, K, {}> = replace(this.query, "values", values);
         return new InsertValuesStatement(this.db, res);
     }
-    insertFrom<K extends keyof I, Q extends ExpressionF<TableSubtype>, G extends {[key: string]: Expression<SQLType, true, P | Q>}>(lambda: (cte: TableProviders<CTE, ExpressionF<{}>>) => BaseSelectStatement<Types, {}, P | Q, G, {[key in K]: I[key]}>): InsertValuesStatement<Types, CTE, P | Q, I, K> {
-        const cteProviders: TableProviders<CTE, ExpressionF<{}>> = <any> {}; //WARN: Type-cast
-
-        for (let key in this.query.cte) {
-            cteProviders[key] = createTableProvider(this.query.cte[key], () => () => identifier(key));
+    insertFrom<K extends keyof I, Q extends ExpressionF<TableSubtype>>(select: AllSelectStatements<Types, {}, P | Q, {[key in K]: I[key]}>): InsertValuesStatement<Types, CTE, P | Q, I, K>;
+    insertFrom<K extends keyof I, Q extends ExpressionF<TableSubtype>>(lambda: ((cte: TableProviders<CTE, ExpressionF<{}>>) => AllSelectStatements<Types, {}, P | Q, {[key in K]: I[key]}>)): InsertValuesStatement<Types, CTE, P | Q, I, K>;
+    insertFrom<K extends keyof I, Q extends ExpressionF<TableSubtype>>(lambda: AllSelectStatements<Types, {}, P | Q, {[key in K]: I[key]}> | ((cte: TableProviders<CTE, ExpressionF<{}>>) => AllSelectStatements<Types, {}, P | Q, {[key in K]: I[key]}>)): InsertValuesStatement<Types, CTE, P | Q, I, K> {
+        var source: BaseSelectStatement<Types, {}, P | Q, {[key in K]: I[key]}>;
+        if (lambda instanceof BaseSelectStatement) {
+            source = lambda;
+        } else {
+            const cteProviders: TableProviders<CTE, ExpressionF<{}>> = <any> {}; //WARN: Type-cast
+            for (let key in this.query.cte) {
+                cteProviders[key] = createTableProvider(this.query.cte[key], () => () => identifier(key));
+            }
+            source = lambda(cteProviders);
         }
-        return new InsertValuesStatement(this.db, replace(this.query, "values", lambda(cteProviders)));
+
+        return new InsertValuesStatement(this.db, replace(this.query, "values", source));
     }
 }
